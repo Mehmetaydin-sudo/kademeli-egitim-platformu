@@ -426,3 +426,10 @@ FodyWeavers.xsd
 
 # Official VS Code C# Dev Kit Extension exclusion
 #*.lscache
+
+# Yerel SQLite veritabanlari (kullanici verisi, repoya girmez)
+Data/*.db
+Data/*.db-shm
+Data/*.db-wal
+Data/*.log
+

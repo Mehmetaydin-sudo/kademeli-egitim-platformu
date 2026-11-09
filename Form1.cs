@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
+using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
@@ -12,21 +14,24 @@ namespace KademeliEgitimPlatformu
 {
     public partial class Form1 : Form
     {
+        private const string Surum = "v0.4.2";
+
         private readonly SoruServisi _soruServisi = new();
         private readonly IlerlemeServisi _ilerlemeServisi = new();
 
         private List<Soru> _aktifSorular = new();
-        private DisiplinTuru? _aktifDisiplin = null;
+        private List<bool> _cevaplar = new();
         private int _mevcutSoruIndex = 0;
         private int _dogruSayisi = 0;
         private int _gecenSaniye = 0;
         private System.Windows.Forms.Timer _sinavTimer = new();
 
         // SQLite (ilerleme.db) üzerinden yüklenen kalıcı kullanıcı verileri
+        // Yeni kullanıcı, kazanmadığı bir başarı yüzdesiyle başlamaz (hepsi 0).
         private int _ipucuJetonu = 3;
-        private int _gorselBasari = 65;
-        private int _veriTabaniBasari = 40;
-        private int _siberBasari = 10;
+        private int _gorselBasari = 0;
+        private int _veriTabaniBasari = 0;
+        private int _siberBasari = 0;
         private bool _simulatorOduluAlindi = false;
 
         // Ana Yerleşim: Sol Sidebar + Sağ İçerik Alanı
@@ -48,7 +53,7 @@ namespace KademeliEgitimPlatformu
         private Label _lblJetonSayaci = new();
         private Label _lblSoruMetni = new();
         private RichTextBox _txtKodBlogu = new();
-        private Label _lblKodSatirNo = new();
+        private RichTextBox _lblKodSatirNo = new();
         private Button[] _secenekButonlari = new Button[4];
         private Panel _pnlNedenYanlis = new();
         private Label _lblNedenYanlisBaslik = new();
@@ -81,22 +86,52 @@ namespace KademeliEgitimPlatformu
 
         private void KaliciIlerlemeyiYukle()
         {
-            IlerlemeDurumu durum = _ilerlemeServisi.Yukle();
-            _gorselBasari = durum.GorselBasari;
-            _veriTabaniBasari = durum.VeriTabaniBasari;
-            _siberBasari = durum.SiberBasari;
-            _ipucuJetonu = durum.IpucuJetonu;
-            _simulatorOduluAlindi = durum.HataAvcisiKazanildi;
+            try
+            {
+                IlerlemeDurumu durum = _ilerlemeServisi.Yukle();
+                _gorselBasari = durum.GorselBasari;
+                _veriTabaniBasari = durum.VeriTabaniBasari;
+                _siberBasari = durum.SiberBasari;
+                _ipucuJetonu = durum.IpucuJetonu;
+                _simulatorOduluAlindi = durum.HataAvcisiKazanildi;
+            }
+            catch (Exception ex)
+            {
+                // Bozuk kilitli veritabanı uygulamayı açılmaz hale getirmesin.
+                MessageBox.Show(
+                    "Kayıtlı ilerleme okunamadı, varsayılan değerlerle başlanıyor.\n\n" + ex.Message,
+                    "İlerleme Yüklenemedi",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
         }
 
         private void KaliciIlerlemeyiKaydet()
         {
-            _ilerlemeServisi.Kaydet(new IlerlemeDurumu(
-                _gorselBasari,
-                _veriTabaniBasari,
-                _siberBasari,
-                _ipucuJetonu,
-                _simulatorOduluAlindi));
+            try
+            {
+                _ilerlemeServisi.Kaydet(new IlerlemeDurumu(
+                    _gorselBasari,
+                    _veriTabaniBasari,
+                    _siberBasari,
+                    _ipucuJetonu,
+                    _simulatorOduluAlindi));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "İlerleme kaydedilemedi. Veri klasörünün yazılabilir olduğundan emin olun.\n\n" + ex.Message,
+                    "Kayıt Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            _sinavTimer.Stop();
+            _sinavTimer.Dispose();
+            base.OnFormClosed(e);
         }
 
         private static void PanelTemizle(Control kapsayici)
@@ -112,7 +147,7 @@ namespace KademeliEgitimPlatformu
         private void ArayuzuOlustur()
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — v0.4.1 (SQLite Kalıcı Mimari)";
+            this.Text = $"Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — {Surum} (SQLite Kalıcı Mimari)";
             this.Size = new Size(1600, 950);
             this.MinimumSize = new Size(1280, 800);
             this.WindowState = FormWindowState.Maximized;
@@ -125,7 +160,6 @@ namespace KademeliEgitimPlatformu
             _pnlIcerikAlani.Dock = DockStyle.Fill;
             _pnlIcerikAlani.BackColor = Color.FromArgb(15, 23, 42);
 
-            AnaMenuyuCiz();
             SinavEkraniniCiz();
             SimulatorEkraniniCiz();
 
@@ -162,12 +196,12 @@ namespace KademeliEgitimPlatformu
             };
 
             _btnMenuAna = SidebarButonu("🏠  Kontrol Paneli", () => EkranDegistir("ANA"));
-            _btnMenuSinav = SidebarButonu("📝  Karma Sınav", () => SinaviBaslat(null, "Karma Değerlendirme Sınavı — Tüm Disiplinler"));
+            _btnMenuSinav = SidebarButonu("📝  Karma Sınav", () => SinaviBaslat(null, null, "Karma Değerlendirme Sınavı — Tüm Disiplinler"));
             _btnMenuSimulator = SidebarButonu("🛠️  Kod Simülatörü", () => EkranDegistir("SIM"));
 
             Label lblAltBilgi = new()
             {
-                Text = "v0.4.1 • %100 Çevrimdışı\nsorular.db & ilerleme.db\n\nMehmet • Ünal\nİsmail Can • Yağız",
+                Text = $"{Surum} • %100 Çevrimdışı\nsorular.db & ilerleme.db\n\nMehmet • Ünal\nİsmail Can • Yağız",
                 Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 Dock = DockStyle.Bottom,
@@ -345,10 +379,27 @@ namespace KademeliEgitimPlatformu
             zorlukIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             zorlukIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
-            bool ortaAcik = _gorselBasari >= 75 || _veriTabaniBasari >= 75 || _siberBasari >= 75;
-            zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Kolay Mod (Açık)", "✓ Seçili", "Temel kavramlar ve rehberli adımlar.", Color.FromArgb(34, 197, 94)), 0, 0);
-            zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Orta Mod (%75 Başarı Barajı)", ortaAcik ? "✓ Kilidi Açık" : "🔒 %75 Baraj", "Giriş için %75 yerel başarı gereklidir.", Color.FromArgb(245, 158, 11)), 1, 0);
-            zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Zor Mod (Simülatör)", _simulatorOduluAlindi ? "✓ Tamamlandı" : "🛠️ Canlı Analiz", "İlk bakışta gizlenen syntax tuzakları.", Color.FromArgb(139, 92, 246)), 2, 0);
+            bool ortaAcik = EnYuksekBasari() >= 75;
+            zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
+                "Kolay Mod (Açık)",
+                "✓ Her Zaman Açık",
+                "Temel kavramlar ve rehberli adımlar. Başlamak için tıklayın.",
+                Color.FromArgb(34, 197, 94),
+                () => SinaviBaslat(null, ZorlukSeviyesi.Kolay, "Kolay Mod — Karma Değerlendirme")), 0, 0);
+
+            zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
+                "Orta Mod (%75 Başarı Barajı)",
+                ortaAcik ? "✓ Kilidi Açık" : "🔒 %75 Baraj",
+                "Giriş için en az bir modülde %75 başarı gereklidir.",
+                Color.FromArgb(245, 158, 11),
+                OrtaModuAc), 1, 0);
+
+            zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
+                "Zor Mod (Simülatör)",
+                _simulatorOduluAlindi ? "✓ Tamamlandı" : "🛠️ Canlı Analiz",
+                "İlk bakışta gizlenen syntax tuzakları. Simülatöre gitmek için tıklayın.",
+                Color.FromArgb(139, 92, 246),
+                () => EkranDegistir("SIM")), 2, 0);
 
             TableLayoutPanel altButonIzgara = new()
             {
@@ -371,7 +422,7 @@ namespace KademeliEgitimPlatformu
                 Cursor = Cursors.Hand
             };
             btnTumunuCoz.FlatAppearance.BorderSize = 0;
-            btnTumunuCoz.Click += (s, e) => SinaviBaslat(null, "Karma Değerlendirme Sınavı — Tüm Disiplinler");
+            btnTumunuCoz.Click += (s, e) => SinaviBaslat(null, null, "Karma Değerlendirme Sınavı — Tüm Disiplinler");
 
             Button btnSimulatorAc = new()
             {
@@ -469,7 +520,7 @@ namespace KademeliEgitimPlatformu
             btnBasla.FlatAppearance.BorderColor = vurguRengi;
             btnBasla.FlatAppearance.BorderSize = 1;
             btnBasla.FlatAppearance.MouseOverBackColor = vurguRengi;
-            btnBasla.Click += (s, e) => SinaviBaslat(disiplin, $"{baslik} — Kademeli Eğitim Modülü");
+            btnBasla.Click += (s, e) => SinaviBaslat(disiplin, null, $"{baslik} — Kademeli Eğitim Modülü");
 
             icIzgara.Controls.Add(lblAd, 0, 0);
             icIzgara.Controls.Add(lblAciklama, 0, 1);
@@ -481,7 +532,7 @@ namespace KademeliEgitimPlatformu
             return kart;
         }
 
-        private Panel ZorlukBilgiKarti(string baslik, string rozetMetin, string altMetin, Color renk)
+        private Panel ZorlukBilgiKarti(string baslik, string rozetMetin, string altMetin, Color renk, Action? tiklama = null)
         {
             Panel p = CerceveliPanelOlustur(renk, Color.FromArgb(22, 32, 50), 1);
             p.Margin = new Padding(10);
@@ -515,10 +566,46 @@ namespace KademeliEgitimPlatformu
                 Dock = DockStyle.Fill
             };
 
+            if (tiklama != null)
+            {
+                p.Cursor = Cursors.Hand;
+                l1.Cursor = Cursors.Hand;
+                l2.Cursor = Cursors.Hand;
+                lblRozet.Cursor = Cursors.Hand;
+
+                p.Click += (s, e) => tiklama();
+                l1.Click += (s, e) => tiklama();
+                l2.Click += (s, e) => tiklama();
+                lblRozet.Click += (s, e) => tiklama();
+            }
+
             p.Controls.Add(l2);
             p.Controls.Add(l1);
             p.Controls.Add(lblRozet);
             return p;
+        }
+
+        /// <summary>Üç modül içindeki en yüksek başarı yüzdesi.</summary>
+        private int EnYuksekBasari() =>
+            Math.Max(_gorselBasari, Math.Max(_veriTabaniBasari, _siberBasari));
+
+        /// <summary>Orta Mod, en az bir modülde %75 başarı gerektirir (README'deki baraj).</summary>
+        private void OrtaModuAc()
+        {
+            int enYuksek = EnYuksekBasari();
+            if (enYuksek < 75)
+            {
+                MessageBox.Show(
+                    "Orta Mod henüz kilitli.\n\n" +
+                    "Giriş için en az bir modülde %75 başarı gerekiyor.\n" +
+                    $"Mevcut en yüksek başarınız: %{enYuksek}",
+                    "Kilitli Mod",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            SinaviBaslat(null, ZorlukSeviyesi.Orta, "Orta Mod — Karma Değerlendirme");
         }
 
         // ==================== 2. SINAV EKRANI ====================
@@ -628,16 +715,19 @@ namespace KademeliEgitimPlatformu
             };
             pnlKodUstBar.Controls.Add(lblKodDosyaAdi);
 
-            _lblKodSatirNo = new()
+            _lblKodSatirNo = new RichTextBox
             {
                 Text = "1\n2\n3\n4\n5\n6\n7\n8",
                 Font = new Font("Consolas", 12.5f),
                 ForeColor = Color.FromArgb(71, 85, 105),
                 BackColor = Color.FromArgb(13, 18, 30),
-                Width = 42,
+                BorderStyle = BorderStyle.None,
+                ReadOnly = true,
+                WordWrap = false,
+                ScrollBars = RichTextBoxScrollBars.None,
+                Width = 46,
                 Dock = DockStyle.Left,
-                TextAlign = ContentAlignment.TopCenter,
-                Padding = new Padding(0, 8, 0, 0)
+                TabStop = false
             };
 
             _txtKodBlogu = new()
@@ -647,8 +737,11 @@ namespace KademeliEgitimPlatformu
                 ForeColor = Color.FromArgb(125, 211, 252),
                 BorderStyle = BorderStyle.None,
                 ReadOnly = true,
+                WordWrap = false,
+                ScrollBars = RichTextBoxScrollBars.Both,
                 Dock = DockStyle.Fill
             };
+            _txtKodBlogu.VScroll += (s, e) => KodSatirlariniHizala();
 
             pnlKodKapsayici.Controls.Add(_txtKodBlogu);
             pnlKodKapsayici.Controls.Add(_lblKodSatirNo);
@@ -1064,6 +1157,9 @@ namespace KademeliEgitimPlatformu
                 return;
             }
 
+            if (_aktifSorular.Count == 0 || _mevcutSoruIndex < 0 || _mevcutSoruIndex >= _aktifSorular.Count)
+                return;
+
             Soru soru = _aktifSorular[_mevcutSoruIndex];
             int elenen = 0;
             for (int i = 0; i < 4; i++)
@@ -1082,19 +1178,29 @@ namespace KademeliEgitimPlatformu
             KaliciIlerlemeyiKaydet(); // Jeton harcandığında SQLite'a kaydet
         }
 
-        private void SinaviBaslat(DisiplinTuru? disiplin, string baslik)
+        private void SinaviBaslat(DisiplinTuru? disiplin, ZorlukSeviyesi? zorluk, string baslik)
         {
-            _aktifDisiplin = disiplin;
             _aktifSorular = disiplin.HasValue
-                ? _soruServisi.SorulariFiltrele(disiplin.Value)
-                : _soruServisi.TumSorulariGetir();
+                ? _soruServisi.SorulariFiltrele(disiplin.Value, zorluk)
+                : _soruServisi.TumSorulariGetir(zorluk);
 
             if (_aktifSorular.Count == 0)
             {
-                MessageBox.Show("Bu modülde henüz soru bulunamadı!", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(
+                    "Bu seçimde henüz soru bulunamadı.\n\n" +
+                    $"Disiplin: {(disiplin?.ToString() ?? "Tümü")}\n" +
+                    $"Zorluk: {(zorluk?.ToString() ?? "Tümü")}\n\n" +
+                    "Soru havuzunu Data/Sorular.json ile genişletebilir veya USB paket yükleyebilirsiniz.",
+                    "Soru Bulunamadı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
                 return;
             }
 
+            // Aynı sorular hep aynı sırada gelmesin (ezberleme önlemi).
+            Karistir(_aktifSorular);
+
+            _cevaplar = new List<bool>();
             _mevcutSoruIndex = 0;
             _dogruSayisi = 0;
             _gecenSaniye = 0;
@@ -1104,6 +1210,38 @@ namespace KademeliEgitimPlatformu
             EkranDegistir("SINAV");
             _sinavTimer.Start();
             SoruyuEkranaYukle();
+        }
+
+        private static void Karistir<T>(IList<T> liste)
+        {
+            for (int i = liste.Count - 1; i > 0; i--)
+            {
+                int j = Random.Shared.Next(i + 1);
+                (liste[i], liste[j]) = (liste[j], liste[i]);
+            }
+        }
+
+        // ==================== KOD GÖRÜNTÜLEYİCİ SATIR NUMARALARI ====================
+        private const int EM_GETFIRSTVISIBLELINE = 0xCE;
+        private const int EM_LINESCROLL = 0xB6;
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        /// <summary>
+        /// Kod kutusu kaydırıldığında satır numarası sütununu aynı konuma getirir.
+        /// İki kutu da aynı fontu kullandığı için satır yükseklikleri birebir eşleşir.
+        /// </summary>
+        private void KodSatirlariniHizala()
+        {
+            if (!_txtKodBlogu.IsHandleCreated || !_lblKodSatirNo.IsHandleCreated)
+                return;
+
+            int hedef = (int)SendMessage(_txtKodBlogu.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+            int mevcut = (int)SendMessage(_lblKodSatirNo.Handle, EM_GETFIRSTVISIBLELINE, IntPtr.Zero, IntPtr.Zero);
+
+            if (hedef != mevcut)
+                SendMessage(_lblKodSatirNo.Handle, EM_LINESCROLL, IntPtr.Zero, (IntPtr)(hedef - mevcut));
         }
 
         private void SoruyuEkranaYukle()
@@ -1119,6 +1257,12 @@ namespace KademeliEgitimPlatformu
             for (int s = 0; s < satirSayisi; s++) satirlar[s] = (s + 1).ToString();
             _lblKodSatirNo.Text = string.Join("\n", satirlar);
 
+            // Yeni soruda her iki görünümü de başa sar ve satır numaralarını hizala.
+            _txtKodBlogu.SelectionStart = 0;
+            _txtKodBlogu.ScrollToCaret();
+            _lblKodSatirNo.SelectionStart = 0;
+            KodSatirlariniHizala();
+
             string[] harfler = { "A", "B", "C", "D" };
             for (int i = 0; i < 4; i++)
             {
@@ -1131,11 +1275,21 @@ namespace KademeliEgitimPlatformu
             _btnIpucuKullan.Enabled = true;
             _pnlNedenYanlis.Visible = false;
             _btnSonrakiSoru.Visible = false;
+            _btnSonrakiSoru.Text = _mevcutSoruIndex == _aktifSorular.Count - 1
+                ? "Sınavı Bitir ✓"
+                : "Sonraki Soru →";
         }
 
         private void SecenekSecildi(int secilenIndex)
         {
             Soru soru = _aktifSorular[_mevcutSoruIndex];
+            bool dogruMu = secilenIndex == soru.DogruSecenekIndex;
+
+            // Disiplin bazlı değerlendirme için cevabı kaydet.
+            if (_cevaplar.Count > _mevcutSoruIndex)
+                _cevaplar[_mevcutSoruIndex] = dogruMu;
+            else
+                _cevaplar.Add(dogruMu);
 
             foreach (var btn in _secenekButonlari)
                 btn.Enabled = false;
@@ -1144,7 +1298,7 @@ namespace KademeliEgitimPlatformu
             _secenekButonlari[soru.DogruSecenekIndex].BackColor = Color.FromArgb(20, 83, 45);
             _secenekButonlari[soru.DogruSecenekIndex].FlatAppearance.BorderColor = Color.FromArgb(34, 197, 94);
 
-            if (secilenIndex == soru.DogruSecenekIndex)
+            if (dogruMu)
             {
                 _dogruSayisi++;
                 _pnlNedenYanlis.BackColor = Color.FromArgb(20, 50, 35);
@@ -1163,10 +1317,16 @@ namespace KademeliEgitimPlatformu
                 _lblNedenYanlisBaslik.ForeColor = Color.FromArgb(251, 146, 60);
                 _lblNedenYanlisAciklama.ForeColor = Color.FromArgb(254, 215, 170);
 
-                if (soru.YanlisCevapAciklamalari.TryGetValue(secilenIndex, out string? aciklama))
+                if (soru.YanlisCevapAciklamalari is not null &&
+                    soru.YanlisCevapAciklamalari.TryGetValue(secilenIndex, out string? aciklama) &&
+                    !string.IsNullOrWhiteSpace(aciklama))
+                {
                     _lblNedenYanlisAciklama.Text = aciklama;
+                }
                 else
+                {
                     _lblNedenYanlisAciklama.Text = "Seçtiğiniz şık bu senaryo için uygun değildir. Yeşil işaretli doğru cevabı inceleyiniz.";
+                }
             }
 
             _pnlNedenYanlis.Visible = true;
@@ -1183,25 +1343,38 @@ namespace KademeliEgitimPlatformu
             else
             {
                 _sinavTimer.Stop();
-                double basariOrani = (double)_dogruSayisi / _aktifSorular.Count * 100;
-                int yuzde = (int)Math.Round(basariOrani);
+                int soruSayisi = _aktifSorular.Count;
+                double basariOrani = soruSayisi == 0 ? 0 : (double)_dogruSayisi / soruSayisi * 100;
 
-                switch (_aktifDisiplin)
+                // Başarıyı her disiplin için ayrı hesapla; karma sınavda
+                // bir modülün yüzdesi diğer modüllerin verisini ezmesin.
+                var disiplinSonuclari = _aktifSorular
+                    .Select((soru, index) => new
+                    {
+                        soru.Disiplin,
+                        Dogru = index < _cevaplar.Count && _cevaplar[index]
+                    })
+                    .GroupBy(x => x.Disiplin)
+                    .Select(g => new
+                    {
+                        Disiplin = g.Key,
+                        Yuzde = (int)Math.Round(g.Count(x => x.Dogru) * 100.0 / g.Count())
+                    });
+
+                foreach (var sonuc in disiplinSonuclari)
                 {
-                    case DisiplinTuru.GorselProgramlama:
-                        _gorselBasari = Math.Max(_gorselBasari, yuzde);
-                        break;
-                    case DisiplinTuru.VeriTabanlari:
-                        _veriTabaniBasari = Math.Max(_veriTabaniBasari, yuzde);
-                        break;
-                    case DisiplinTuru.SiberGuvenlik:
-                        _siberBasari = Math.Max(_siberBasari, yuzde);
-                        break;
-                    default:
-                        _gorselBasari = Math.Max(_gorselBasari, yuzde);
-                        _veriTabaniBasari = Math.Max(_veriTabaniBasari, yuzde);
-                        _siberBasari = Math.Max(_siberBasari, yuzde);
-                        break;
+                    switch (sonuc.Disiplin)
+                    {
+                        case DisiplinTuru.GorselProgramlama:
+                            _gorselBasari = Math.Max(_gorselBasari, sonuc.Yuzde);
+                            break;
+                        case DisiplinTuru.VeriTabanlari:
+                            _veriTabaniBasari = Math.Max(_veriTabaniBasari, sonuc.Yuzde);
+                            break;
+                        case DisiplinTuru.SiberGuvenlik:
+                            _siberBasari = Math.Max(_siberBasari, sonuc.Yuzde);
+                            break;
+                    }
                 }
 
                 if (basariOrani >= 75)
