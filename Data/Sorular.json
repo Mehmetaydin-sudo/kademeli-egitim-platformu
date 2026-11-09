@@ -1,0 +1,59 @@
+[
+  {
+    "Id": 1,
+    "Disiplin": 0,
+    "Zorluk": 1,
+    "Baslik": "Aşağıdaki C# event handler (olay yöneticisi) kodu tetiklendiğinde, arayüzün kilitlenmesini önlemek ve arka planda veri çekmek için hangi yöntem kullanılmalıdır?",
+    "KodBlogu": "private void btnVericek_Click(object sender, EventArgs e)\n{\n    lblDurum.Text = \"Veri alınıyor...\";\n    // Bu işlemin arayüzü kilitlememesi için ne yapılmalı?\n    VeriyiVeritabanindanGetir();\n    lblDurum.Text = \"Veri yüklendi.\";\n}",
+    "Secenekler": [
+      "Kodu bir try-catch bloğu içine alarak hataları yakalamak.",
+      "Metodu Thread.Sleep(5000) ile 5 saniye boyunca bekletmek.",
+      "Metodu async tanımlayıp, await Task.Run(() => VeriyiVeritabanindanGetir()) kullanmak.",
+      "Application.DoEvents() metodunu döngü içerisinde sık sık çağırmak."
+    ],
+    "DogruSecenekIndex": 2,
+    "YanlisCevapAciklamalari": {
+      "0": "Try-catch blokları sadece çalışma zamanı hatalarını yakalar; arayüz (UI) iş parçacığının donmasını engellemez.",
+      "1": "Thread.Sleep() doğrudan ana arayüz iş parçacığını dondurur ve uygulamanın tamamen kilitlenmesine yol açar.",
+      "3": "Application.DoEvents() eski ve riskli bir tekniktir; modern mimarilerde beklenmedik çökmelere yol açar."
+    }
+  },
+  {
+    "Id": 2,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Baslik": "Bir ilişkisel veri tabanında (SQLite/SQL) iki farklı tablodaki verileri ortak bir sütun üzerinden eşleştirerek tek bir sorguda listelemek için hangi SQL komutu kullanılır?",
+    "KodBlogu": "SELECT Ogrenciler.Ad, Notlar.Puan\nFROM Ogrenciler\n??? Notlar ON Ogrenciler.Id = Notlar.OgrenciId;",
+    "Secenekler": [
+      "JOIN (INNER JOIN)",
+      "GROUP BY",
+      "ORDER BY",
+      "DISTINCT"
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "GROUP BY verileri belirli sütunlara göre gruplamak (özetlemek) için kullanılır, tabloları birleştirmek için değil.",
+      "2": "ORDER BY gelen sorgu sonucunu sıralamak (A-Z veya artan/azalan) için kullanılır.",
+      "3": "DISTINCT sorgu sonucundaki mükerrer (tekrar eden) kayıtları teke indirmek için kullanılır."
+    }
+  },
+  {
+    "Id": 3,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Baslik": "Kullanıcıdan alınan şifrelerin yerel veri tabanında güvenli bir şekilde saklanması için aşağıdaki yöntemlerden hangisi uygulanmalıdır?",
+    "KodBlogu": "// Kullanıcı Kaydı: Şifre kaydetme işlemi\nstring sifre = txtSifre.Text;\n// Veri tabanına nasıl kaydedilmeli?",
+    "Secenekler": [
+      "Şifre doğrudan düz metin (plain text) olarak kaydedilmelidir.",
+      "Geri döndürülemez bir özetleme (SHA-256 / Hash) algoritmasından geçirilerek kaydedilmelidir.",
+      "Şifre sadece büyük harfe çevrilip kaydedilmelidir.",
+      "Şifre Base64 ile kodlanıp düz metin gibi saklanmalıdır."
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "Düz metin saklanan şifreler, veri tabanı dosyası çalındığında anında ifşa olur.",
+      "2": "Büyük harfe çevirmek şifreleme değildir, herkes tarafından okunabilir.",
+      "3": "Base64 bir şifreleme değil, sadece format dönüştürmedir; herkes tek tıkla orijinal şifreyi çözebilir."
+    }
+  }
+]
