@@ -24,6 +24,22 @@ Ortaöğretim ve ön lisans öğrencileri için **%100 çevrimdışı (offline)*
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
 
+### [v0.3.0 - v0.3.1] — 2026-11-09
+
+**Eklenenler (v0.3.0)**
+- Sol sidebar navigasyonu ve 3 ekranlı yapı (Ana Menü, Sınav, Simülatör)
+- VS Code temalı kod bloğu ve "Neden Yanlış" açıklama paneli
+- İpucu jetonu sistemi ve %75 başarı barajı mantığı
+- Gömülü kod simülatörü ve çevrimdışı hata karnesi (.txt)
+
+**Düzeltilenler (v0.3.1)**
+- Ekran geçişlerinde oluşan bellek sızıntısı giderildi (Dispose ve font önbelleği)
+- Başarı yüzdesi artık çözülen disipline yazılıyor
+- Simülatörde sınırsız puan kazanma açığı kapatıldı
+- Kod bloğu satır numaraları dinamik hale getirildi
+- Bozuk USB soru paketlerinin uygulamayı çökertmesi engellendi
+- Simülatör kontrolü Regex ile güçlendirildi
+  
 ### [v0.2.0] — 2026-11-09
 * **[Eklendi]** Gömülü Kod Simülatörü (Zor Mod canlı C# syntax tuzağı analiz ekranı) eklendi.
 * **[Eklendi]** USB / Klasörden dışarıdan `.json` soru paketi yükleme (`DisaridanPaketYukle`) özelliği devreye alındı.
