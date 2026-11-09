@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
@@ -14,34 +13,33 @@ namespace KademeliEgitimPlatformu
     public partial class Form1 : Form
     {
         private readonly SoruServisi _soruServisi = new();
+        private readonly IlerlemeServisi _ilerlemeServisi = new();
+
         private List<Soru> _aktifSorular = new();
-        private DisiplinTuru? _aktifDisiplin;          // [DÜZELTME 2] Hangi modülün sınavı çözülüyor
+        private DisiplinTuru? _aktifDisiplin = null;
         private int _mevcutSoruIndex = 0;
         private int _dogruSayisi = 0;
-        private int _ipucuJetonu = 3;
         private int _gecenSaniye = 0;
-        private readonly System.Windows.Forms.Timer _sinavTimer = new();
+        private System.Windows.Forms.Timer _sinavTimer = new();
 
+        // SQLite (ilerleme.db) üzerinden yüklenen kalıcı kullanıcı verileri
+        private int _ipucuJetonu = 3;
         private int _gorselBasari = 65;
         private int _veriTabaniBasari = 40;
         private int _siberBasari = 10;
-
-        private bool _hataAvcisiKazanildi = false;     // [DÜZELTME 3] Simülatör puanı sadece 1 kez verilir
-
-        // Font önbelleği: her çizimde yeni Font üretip sızıntı yapmamak için
-        private readonly Dictionary<(string, float, FontStyle), Font> _fontOnbellegi = new();
+        private bool _simulatorOduluAlindi = false;
 
         // Ana Yerleşim: Sol Sidebar + Sağ İçerik Alanı
-        private readonly Panel _pnlSidebar = new();
-        private readonly Panel _pnlIcerikAlani = new();
+        private Panel _pnlSidebar = new();
+        private Panel _pnlIcerikAlani = new();
         private Button _btnMenuAna = new();
         private Button _btnMenuSinav = new();
         private Button _btnMenuSimulator = new();
 
         // 3 Ana Ekran Paneli
-        private readonly Panel _pnlAnaMenu = new();
-        private readonly Panel _pnlSinavEkrani = new();
-        private readonly Panel _pnlSimulatorVeKarne = new();
+        private Panel _pnlAnaMenu = new();
+        private Panel _pnlSinavEkrani = new();
+        private Panel _pnlSimulatorVeKarne = new();
 
         // Sınav Ekranı Bileşenleri
         private Label _lblDisiplinBaslik = new();
@@ -51,7 +49,7 @@ namespace KademeliEgitimPlatformu
         private Label _lblSoruMetni = new();
         private RichTextBox _txtKodBlogu = new();
         private Label _lblKodSatirNo = new();
-        private readonly Button[] _secenekButonlari = new Button[4];
+        private Button[] _secenekButonlari = new Button[4];
         private Panel _pnlNedenYanlis = new();
         private Label _lblNedenYanlisBaslik = new();
         private Label _lblNedenYanlisAciklama = new();
@@ -61,14 +59,14 @@ namespace KademeliEgitimPlatformu
         // Simülatör Bileşenleri
         private RichTextBox _txtSimulatorKod = new();
         private Label _lblSimulatorSonuc = new();
-        private Label _lblBeceri1 = new();
-        private Label _lblBeceri2 = new();
-        private Label _lblBeceri3 = new();
 
         public Form1()
         {
             InitializeComponent();
             this.DoubleBuffered = true;
+
+            // Açılışta SQLite ilerleme.db'den kayıtlı verileri yükle
+            KaliciIlerlemeyiYukle();
 
             _sinavTimer.Interval = 1000;
             _sinavTimer.Tick += (s, e) =>
@@ -76,63 +74,45 @@ namespace KademeliEgitimPlatformu
                 _gecenSaniye++;
                 int dk = _gecenSaniye / 60;
                 int sn = _gecenSaniye % 60;
-                _lblSureSayaci.Text = $"⏱️ {dk:00}:{sn:00}";
+                _lblSureSayaci.Text = $"⏱️ {dk:00}:{sn:00}   ";
             };
-
-            // Kaynakları serbest bırak
-            this.FormClosed += (s, e) =>
-            {
-                _sinavTimer.Stop();
-                _sinavTimer.Dispose();
-                foreach (var font in _fontOnbellegi.Values)
-                    font.Dispose();
-                _fontOnbellegi.Clear();
-            };
-
             ArayuzuOlustur();
         }
 
-        // ==================== YARDIMCI METOTLAR ====================
-
-        /// <summary>Aynı fontu tekrar tekrar üretmek yerine önbellekten verir.</summary>
-        private Font Yazi(float boyut, FontStyle stil = FontStyle.Regular, string aile = "Segoe UI")
+        private void KaliciIlerlemeyiYukle()
         {
-            var anahtar = (aile, boyut, stil);
-            if (!_fontOnbellegi.TryGetValue(anahtar, out Font? font))
-            {
-                font = new Font(aile, boyut, stil);
-                _fontOnbellegi[anahtar] = font;
-            }
-            return font;
+            IlerlemeDurumu durum = _ilerlemeServisi.Yukle();
+            _gorselBasari = durum.GorselBasari;
+            _veriTabaniBasari = durum.VeriTabaniBasari;
+            _siberBasari = durum.SiberBasari;
+            _ipucuJetonu = durum.IpucuJetonu;
+            _simulatorOduluAlindi = durum.HataAvcisiKazanildi;
         }
 
-        /// <summary>[DÜZELTME 1] Controls.Clear() yerine: kontrolleri gerçekten Dispose eder.</summary>
-        private static void PaneliTemizle(Control panel)
+        private void KaliciIlerlemeyiKaydet()
         {
-            while (panel.Controls.Count > 0)
+            _ilerlemeServisi.Kaydet(new IlerlemeDurumu(
+                _gorselBasari,
+                _veriTabaniBasari,
+                _siberBasari,
+                _ipucuJetonu,
+                _simulatorOduluAlindi));
+        }
+
+        private static void PanelTemizle(Control kapsayici)
+        {
+            while (kapsayici.Controls.Count > 0)
             {
-                Control c = panel.Controls[0];
-                panel.Controls.RemoveAt(0);
+                Control c = kapsayici.Controls[0];
+                kapsayici.Controls.RemoveAt(0);
                 c.Dispose();
             }
         }
 
-        /// <summary>[DÜZELTME 5] Bozuk / eksik paketlerden gelen soruların uygulamayı çökertmesini engeller.</summary>
-        private static bool SoruGecerliMi(Soru? s)
-        {
-            return s != null
-                && !string.IsNullOrWhiteSpace(s.Baslik)
-                && s.Secenekler != null
-                && s.Secenekler.Count() == 4
-                && s.DogruSecenekIndex >= 0
-                && s.DogruSecenekIndex < 4;
-        }
-
-        // ==================== ARAYÜZ İSKELETİ ====================
         private void ArayuzuOlustur()
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — v0.3.1 (Modern UI)";
+            this.Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — v0.4.1 (SQLite Kalıcı Mimari)";
             this.Size = new Size(1600, 950);
             this.MinimumSize = new Size(1280, 800);
             this.WindowState = FormWindowState.Maximized;
@@ -147,7 +127,7 @@ namespace KademeliEgitimPlatformu
 
             AnaMenuyuCiz();
             SinavEkraniniCiz();
-            SimulatorEkraniniCiz();   // Sadece 1 kez çizilir; yazılan kod ekran değişiminde kaybolmaz
+            SimulatorEkraniniCiz();
 
             _pnlIcerikAlani.Controls.Add(_pnlAnaMenu);
             _pnlIcerikAlani.Controls.Add(_pnlSinavEkrani);
@@ -159,11 +139,11 @@ namespace KademeliEgitimPlatformu
             EkranDegistir("ANA");
         }
 
-        // ==================== SOL YAN NAVİGASYON ====================
+        // ==================== SOL YAN NAVİGASYON (SIDEBAR) ====================
         private void SidebarOlustur()
         {
             _pnlSidebar.Dock = DockStyle.Left;
-            _pnlSidebar.Width = 230;
+            _pnlSidebar.Width = 235;
             _pnlSidebar.BackColor = Color.FromArgb(9, 13, 24);
             _pnlSidebar.Padding = new Padding(12, 25, 12, 20);
             _pnlSidebar.Paint += (s, e) =>
@@ -174,8 +154,8 @@ namespace KademeliEgitimPlatformu
 
             Label lblLogo = new()
             {
-                Text = "⚡ EDUSEC\n    YEREL MİMARİ",
-                Font = Yazi(13f, FontStyle.Bold),
+                Text = "⚡ EDUSEC\n    SQLITE MİMARİ",
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(56, 189, 248),
                 Dock = DockStyle.Top,
                 Height = 70
@@ -187,8 +167,8 @@ namespace KademeliEgitimPlatformu
 
             Label lblAltBilgi = new()
             {
-                Text = "v0.3.1 • %100 Çevrimdışı\nSQLite / JSON Motoru\n\nMehmet • Ünal\nİsmail Can • Yağız",
-                Font = Yazi(8.5f),
+                Text = "v0.4.1 • %100 Çevrimdışı\nsorular.db & ilerleme.db\n\nMehmet • Ünal\nİsmail Can • Yağız",
+                Font = new Font("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 Dock = DockStyle.Bottom,
                 Height = 95
@@ -206,7 +186,7 @@ namespace KademeliEgitimPlatformu
             Button btn = new()
             {
                 Text = metin,
-                Font = Yazi(10.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(203, 213, 225),
                 BackColor = Color.FromArgb(9, 13, 24),
                 FlatStyle = FlatStyle.Flat,
@@ -229,22 +209,19 @@ namespace KademeliEgitimPlatformu
             _pnlSimulatorVeKarne.Visible = ekranKodu == "SIM";
 
             if (ekranKodu != "SINAV") _sinavTimer.Stop();
-            if (ekranKodu == "ANA") AnaMenuyuCiz();   // Skorlar değiştiği için yenilenir
-            if (ekranKodu == "SIM") KarneyiGuncelle(); // Editör korunur, sadece karne değerleri yenilenir
+            if (ekranKodu == "ANA") AnaMenuyuCiz();
+            if (ekranKodu == "SIM") SimulatorEkraniniCiz();
 
-            // Aktif menü vurgusu
-            MenuVurgula(_btnMenuAna, ekranKodu == "ANA");
-            MenuVurgula(_btnMenuSinav, ekranKodu == "SINAV");
-            MenuVurgula(_btnMenuSimulator, ekranKodu == "SIM");
+            _btnMenuAna.BackColor = ekranKodu == "ANA" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
+            _btnMenuAna.ForeColor = ekranKodu == "ANA" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
+
+            _btnMenuSinav.BackColor = ekranKodu == "SINAV" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
+            _btnMenuSinav.ForeColor = ekranKodu == "SINAV" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
+
+            _btnMenuSimulator.BackColor = ekranKodu == "SIM" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
+            _btnMenuSimulator.ForeColor = ekranKodu == "SIM" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
         }
 
-        private static void MenuVurgula(Button btn, bool aktif)
-        {
-            btn.BackColor = aktif ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
-            btn.ForeColor = aktif ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
-        }
-
-        // ==================== ÖZEL ÇİZİMLİ KART PANELİ ====================
         private Panel CerceveliPanelOlustur(Color cerceveRengi, Color arkaPlan, int kalinlik = 1)
         {
             Panel p = new()
@@ -265,7 +242,7 @@ namespace KademeliEgitimPlatformu
         // ==================== 1. ANA MENÜ ====================
         private void AnaMenuyuCiz()
         {
-            PaneliTemizle(_pnlAnaMenu);
+            PanelTemizle(_pnlAnaMenu);
             _pnlAnaMenu.Dock = DockStyle.Fill;
             _pnlAnaMenu.Padding = new Padding(40, 28, 40, 28);
             _pnlAnaMenu.BackColor = Color.FromArgb(15, 23, 42);
@@ -283,12 +260,11 @@ namespace KademeliEgitimPlatformu
             anaIzgara.RowStyles.Add(new RowStyle(SizeType.Percent, 28F));
             anaIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 75F));
 
-            // 1. Satır: Üst Başlık ve Rozetler
             Panel pnlUst = new() { Dock = DockStyle.Fill };
             Label lblBaslik = new()
             {
                 Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu",
-                Font = Yazi(20f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 20, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Left,
                 AutoSize = true
@@ -296,12 +272,12 @@ namespace KademeliEgitimPlatformu
 
             Button btnUsbPaketYukle = new()
             {
-                Text = "📥 USB Paket Yükle (.db / .json)",
-                Font = Yazi(10f, FontStyle.Bold),
+                Text = "📥 USB Paket Yükle (.json)",
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.FromArgb(125, 211, 252),
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(255, 44),
+                Size = new Size(245, 44),
                 Dock = DockStyle.Right,
                 Cursor = Cursors.Hand
             };
@@ -310,8 +286,8 @@ namespace KademeliEgitimPlatformu
 
             Label lblCevrimdisi = new()
             {
-                Text = "  ● %100 Çevrimdışı (Yerel SQLite Aktif)  ",
-                Font = Yazi(10f, FontStyle.Bold),
+                Text = "  ● %100 Çevrimdışı (SQLite Aktif)  ",
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(74, 222, 128),
                 BackColor = Color.FromArgb(20, 65, 40),
                 Dock = DockStyle.Right,
@@ -325,17 +301,15 @@ namespace KademeliEgitimPlatformu
             pnlUst.Controls.Add(pnlBosluk);
             pnlUst.Controls.Add(btnUsbPaketYukle);
 
-            // 2. Satır: Eğitim Modülleri Başlık
             Label lblAltBaslik = new()
             {
-                Text = $"Eğitim Modülleri   •   Aktif Yerel Soru Havuzu: {_soruServisi.TumSorulariGetir().Count} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
-                Font = Yazi(13f, FontStyle.Bold),
+                Text = $"Eğitim Modülleri   •   SQLite Soru Havuzu: {_soruServisi.TumSorulariGetir().Count} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.BottomLeft
             };
 
-            // 3. Satır: 3 Çekirdek Disiplin Kartı
             TableLayoutPanel modullerIzgara = new()
             {
                 Dock = DockStyle.Fill,
@@ -351,17 +325,15 @@ namespace KademeliEgitimPlatformu
             modullerIzgara.Controls.Add(ModulKartiOlustur("🗄️  Veri Tabanları", "Yerel SQLite mimarisi, tablo yapıları, ilişkisel sorgu tasarımı ve veri bütünlüğü.", _veriTabaniBasari, Color.FromArgb(245, 158, 11), DisiplinTuru.VeriTabanlari), 1, 0);
             modullerIzgara.Controls.Add(ModulKartiOlustur("🛡️  Siber Güvenlik", "Güvenli kodlama ilkeleri, SHA-256 özetleme (hash), saldırı senaryoları ve zafiyet analizi.", _siberBasari, Color.FromArgb(236, 72, 153), DisiplinTuru.SiberGuvenlik), 2, 0);
 
-            // 4. Satır: Zorluk Seviyesi Başlık
             Label lblZorlukBaslik = new()
             {
                 Text = "Zorluk Seviyesi Seçimi ve Kademeli Geçiş Kuralları",
-                Font = Yazi(13f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.BottomLeft
             };
 
-            // 5. Satır: 3 Zorluk Kartı
             TableLayoutPanel zorlukIzgara = new()
             {
                 Dock = DockStyle.Fill,
@@ -376,9 +348,8 @@ namespace KademeliEgitimPlatformu
             bool ortaAcik = _gorselBasari >= 75 || _veriTabaniBasari >= 75 || _siberBasari >= 75;
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Kolay Mod (Açık)", "✓ Seçili", "Temel kavramlar ve rehberli adımlar.", Color.FromArgb(34, 197, 94)), 0, 0);
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Orta Mod (%75 Başarı Barajı)", ortaAcik ? "✓ Kilidi Açık" : "🔒 %75 Baraj", "Giriş için %75 yerel başarı gereklidir.", Color.FromArgb(245, 158, 11)), 1, 0);
-            zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Zor Mod (Simülatör)", "🛠️ Canlı Analiz", "İlk bakışta gizlenen syntax tuzakları.", Color.FromArgb(139, 92, 246)), 2, 0);
+            zorlukIzgara.Controls.Add(ZorlukBilgiKarti("Zor Mod (Simülatör)", _simulatorOduluAlindi ? "✓ Tamamlandı" : "🛠️ Canlı Analiz", "İlk bakışta gizlenen syntax tuzakları.", Color.FromArgb(139, 92, 246)), 2, 0);
 
-            // 6. Satır: Alt Aksiyon Butonları
             TableLayoutPanel altButonIzgara = new()
             {
                 Dock = DockStyle.Fill,
@@ -391,7 +362,7 @@ namespace KademeliEgitimPlatformu
             Button btnTumunuCoz = new()
             {
                 Text = "🚀 Karma Değerlendirme Sınavını Başlat (Tüm Modüller)",
-                Font = Yazi(11.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(37, 99, 235),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -405,7 +376,7 @@ namespace KademeliEgitimPlatformu
             Button btnSimulatorAc = new()
             {
                 Text = "🛠️ Gömülü Kod Simülatörü & Çevrimdışı Hata Karnesi",
-                Font = Yazi(11.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(124, 58, 237),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -451,7 +422,7 @@ namespace KademeliEgitimPlatformu
             Label lblAd = new()
             {
                 Text = baslik,
-                Font = Yazi(14.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 14.5f, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Fill
             };
@@ -459,7 +430,7 @@ namespace KademeliEgitimPlatformu
             Label lblAciklama = new()
             {
                 Text = aciklama,
-                Font = Yazi(10f),
+                Font = new Font("Segoe UI", 10f),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill
             };
@@ -467,12 +438,11 @@ namespace KademeliEgitimPlatformu
             Label lblGelisim = new()
             {
                 Text = $"Gelişim: %{ilerlemeYuzdesi}",
-                Font = Yazi(10f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = vurguRengi,
                 Dock = DockStyle.Fill
             };
 
-            // Özel çizimli modern ilerleme çubuğu
             Panel pnlOzelBar = new()
             {
                 Dock = DockStyle.Top,
@@ -489,7 +459,7 @@ namespace KademeliEgitimPlatformu
             Button btnBasla = new()
             {
                 Text = ilerlemeYuzdesi > 20 ? "Devam Et →" : "Başla →",
-                Font = Yazi(10.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -520,7 +490,7 @@ namespace KademeliEgitimPlatformu
             Label lblRozet = new()
             {
                 Text = $" {rozetMetin} ",
-                Font = Yazi(9f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 9f, FontStyle.Bold),
                 ForeColor = renk,
                 BackColor = Color.FromArgb(15, 23, 42),
                 Dock = DockStyle.Right,
@@ -531,7 +501,7 @@ namespace KademeliEgitimPlatformu
             Label l1 = new()
             {
                 Text = baslik,
-                Font = Yazi(12f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Top,
                 Height = 32
@@ -540,7 +510,7 @@ namespace KademeliEgitimPlatformu
             Label l2 = new()
             {
                 Text = altMetin,
-                Font = Yazi(10f),
+                Font = new Font("Segoe UI", 10f),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill
             };
@@ -554,7 +524,7 @@ namespace KademeliEgitimPlatformu
         // ==================== 2. SINAV EKRANI ====================
         private void SinavEkraniniCiz()
         {
-            PaneliTemizle(_pnlSinavEkrani);
+            PanelTemizle(_pnlSinavEkrani);
             _pnlSinavEkrani.Dock = DockStyle.Fill;
             _pnlSinavEkrani.Padding = new Padding(45, 25, 45, 25);
             _pnlSinavEkrani.BackColor = Color.FromArgb(15, 23, 42);
@@ -572,12 +542,11 @@ namespace KademeliEgitimPlatformu
             sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Percent, 20F));
             sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 62F));
 
-            // 1. Satır: Üst Bar
             Panel pnlUst = new() { Dock = DockStyle.Fill };
             _lblDisiplinBaslik = new()
             {
-                Text = "Görsel Programlama — Orta Mod (Mimari ve Tepki)",
-                Font = Yazi(17f, FontStyle.Bold),
+                Text = "Görsel Programlama — Orta Mod",
+                Font = new Font("Segoe UI", 17, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Top,
                 AutoSize = true
@@ -586,7 +555,7 @@ namespace KademeliEgitimPlatformu
             _lblSoruSayaci = new()
             {
                 Text = "Soru 1 / 3",
-                Font = Yazi(11.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(56, 189, 248),
                 Dock = DockStyle.Bottom,
                 AutoSize = true
@@ -595,7 +564,7 @@ namespace KademeliEgitimPlatformu
             Button btnAnaMenuyeDon = new()
             {
                 Text = "✕ Kapat",
-                Font = Yazi(10f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 BackColor = Color.FromArgb(51, 65, 85),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -609,7 +578,7 @@ namespace KademeliEgitimPlatformu
             _lblSureSayaci = new()
             {
                 Text = "⏱️ 00:00   ",
-                Font = Yazi(12f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Right,
                 TextAlign = ContentAlignment.MiddleRight,
@@ -619,7 +588,7 @@ namespace KademeliEgitimPlatformu
             _lblJetonSayaci = new()
             {
                 Text = $"🔑 İpucu Jetonu: {_ipucuJetonu}   ",
-                Font = Yazi(12f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(250, 204, 21),
                 Dock = DockStyle.Right,
                 TextAlign = ContentAlignment.MiddleRight,
@@ -632,16 +601,14 @@ namespace KademeliEgitimPlatformu
             pnlUst.Controls.Add(_lblSureSayaci);
             pnlUst.Controls.Add(btnAnaMenuyeDon);
 
-            // 2. Satır: Soru Metni
             _lblSoruMetni = new()
             {
-                Font = Yazi(13f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(241, 245, 249),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
-            // 3. Satır: VS Code Tarzı Kod Kutusu
             Panel pnlKodKapsayici = CerceveliPanelOlustur(Color.FromArgb(51, 65, 85), Color.FromArgb(9, 13, 22), 1);
             pnlKodKapsayici.Margin = new Padding(0, 4, 0, 10);
 
@@ -655,7 +622,7 @@ namespace KademeliEgitimPlatformu
             Label lblKodDosyaAdi = new()
             {
                 Text = "🔴 🟡 🟢    OrnekKodBlogu.cs — Salt Okunur İnceleme Modu",
-                Font = Yazi(9.5f, FontStyle.Bold, "Consolas"),
+                Font = new Font("Consolas", 9.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 AutoSize = true
             };
@@ -663,8 +630,8 @@ namespace KademeliEgitimPlatformu
 
             _lblKodSatirNo = new()
             {
-                Text = "1",
-                Font = Yazi(12.5f, FontStyle.Regular, "Consolas"),
+                Text = "1\n2\n3\n4\n5\n6\n7\n8",
+                Font = new Font("Consolas", 12.5f),
                 ForeColor = Color.FromArgb(71, 85, 105),
                 BackColor = Color.FromArgb(13, 18, 30),
                 Width = 42,
@@ -675,12 +642,11 @@ namespace KademeliEgitimPlatformu
 
             _txtKodBlogu = new()
             {
-                Font = Yazi(12.5f, FontStyle.Regular, "Consolas"),
+                Font = new Font("Consolas", 12.5f),
                 BackColor = Color.FromArgb(9, 13, 22),
                 ForeColor = Color.FromArgb(125, 211, 252),
                 BorderStyle = BorderStyle.None,
                 ReadOnly = true,
-                WordWrap = false,   // Satır numaralarıyla birebir hizalansın
                 Dock = DockStyle.Fill
             };
 
@@ -688,7 +654,6 @@ namespace KademeliEgitimPlatformu
             pnlKodKapsayici.Controls.Add(_lblKodSatirNo);
             pnlKodKapsayici.Controls.Add(pnlKodUstBar);
 
-            // 4. Satır: 4 Şık Butonu
             TableLayoutPanel siklarIzgara = new()
             {
                 Dock = DockStyle.Fill,
@@ -702,7 +667,7 @@ namespace KademeliEgitimPlatformu
                 int secenekIndex = i;
                 Button btn = new()
                 {
-                    Font = Yazi(11.5f),
+                    Font = new Font("Segoe UI", 11.5f),
                     BackColor = Color.FromArgb(24, 34, 52),
                     ForeColor = Color.White,
                     FlatStyle = FlatStyle.Flat,
@@ -721,14 +686,13 @@ namespace KademeliEgitimPlatformu
                 siklarIzgara.Controls.Add(btn, 0, i);
             }
 
-            // 5. Satır: Neden Yanlış Paneli
             _pnlNedenYanlis = CerceveliPanelOlustur(Color.FromArgb(234, 88, 12), Color.FromArgb(43, 27, 23), 1);
             _pnlNedenYanlis.Padding = new Padding(18, 10, 18, 10);
             _pnlNedenYanlis.Visible = false;
 
             _lblNedenYanlisAciklama = new()
             {
-                Font = Yazi(11f),
+                Font = new Font("Segoe UI", 11f),
                 ForeColor = Color.FromArgb(254, 215, 170),
                 Dock = DockStyle.Fill
             };
@@ -736,7 +700,7 @@ namespace KademeliEgitimPlatformu
             _lblNedenYanlisBaslik = new()
             {
                 Text = "Neden Yanlış Açıklaması",
-                Font = Yazi(12f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 12f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(251, 146, 60),
                 Dock = DockStyle.Top,
                 Height = 28
@@ -745,13 +709,12 @@ namespace KademeliEgitimPlatformu
             _pnlNedenYanlis.Controls.Add(_lblNedenYanlisAciklama);
             _pnlNedenYanlis.Controls.Add(_lblNedenYanlisBaslik);
 
-            // 6. Satır: Alt Butonlar
             Panel pnlAlt = new() { Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 0) };
 
             _btnIpucuKullan = new()
             {
                 Text = "💡 İpucu Kullan (2 Yanlış Şıkkı Ele)",
-                Font = Yazi(10.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.FromArgb(250, 204, 21),
                 FlatStyle = FlatStyle.Flat,
@@ -765,7 +728,7 @@ namespace KademeliEgitimPlatformu
             _btnSonrakiSoru = new()
             {
                 Text = "Sonraki Soru →",
-                Font = Yazi(11f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold),
                 BackColor = Color.FromArgb(37, 99, 235),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -793,7 +756,7 @@ namespace KademeliEgitimPlatformu
         // ==================== 3. SİMÜLATÖR VE HATA KARNESİ ====================
         private void SimulatorEkraniniCiz()
         {
-            PaneliTemizle(_pnlSimulatorVeKarne);
+            PanelTemizle(_pnlSimulatorVeKarne);
             _pnlSimulatorVeKarne.Dock = DockStyle.Fill;
             _pnlSimulatorVeKarne.Padding = new Padding(40, 28, 40, 28);
             _pnlSimulatorVeKarne.BackColor = Color.FromArgb(15, 23, 42);
@@ -811,7 +774,7 @@ namespace KademeliEgitimPlatformu
             Label lblBaslik = new()
             {
                 Text = "🛠️ Gömülü Kod Simülatörü ve Çevrimdışı Hata Karnesi",
-                Font = Yazi(19f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 19, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Left,
                 AutoSize = true
@@ -820,7 +783,7 @@ namespace KademeliEgitimPlatformu
             Button btnGeri = new()
             {
                 Text = "✕ Ana Menüye Dön",
-                Font = Yazi(10f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10f, FontStyle.Bold),
                 BackColor = Color.FromArgb(51, 65, 85),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -862,7 +825,7 @@ namespace KademeliEgitimPlatformu
             Label lblSimBaslik = new()
             {
                 Text = "Zor Mod — Gizli Syntax Tuzağı Analizi (Canlı Editör)",
-                Font = Yazi(13.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 13.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(56, 189, 248),
                 Dock = DockStyle.Fill
             };
@@ -870,21 +833,21 @@ namespace KademeliEgitimPlatformu
             Label lblSimYonerge = new()
             {
                 Text = "Aşağıdaki C# kodunda bulunan 2 gizli sözdizimi/mantık tuzağını düzeltip 'Kontrolcüyü Çalıştır' butonuna basın:",
-                Font = Yazi(10f),
+                Font = new Font("Segoe UI", 10f),
                 ForeColor = Color.FromArgb(203, 213, 225),
                 Dock = DockStyle.Fill
             };
 
             _txtSimulatorKod = new()
             {
-                Font = Yazi(12.5f, FontStyle.Regular, "Consolas"),
+                Font = new Font("Consolas", 12.5f),
                 BackColor = Color.FromArgb(9, 13, 22),
                 ForeColor = Color.FromArgb(248, 250, 252),
                 BorderStyle = BorderStyle.FixedSingle,
                 Dock = DockStyle.Fill,
                 Text = "// GÖREV: Aşağıdaki 2 gizli syntax hatasını düzeltin:\n" +
-                       "// 1. if bloğunun sonundaki noktalı virgül tuzağını kaldırın.\n" +
-                       "// 2. Atama operatörü yerine karşılaştırma operatörünü kullanın.\n\n" +
+                       "// 1. if bloğunun sonundaki noktalı virgül (;) tuzağını kaldırın.\n" +
+                       "// 2. Atama operatörü (=) yerine karşılaştırma (==) kullanın.\n\n" +
                        "public void YetkiKontrol(int kullaniciRol)\n" +
                        "{\n" +
                        "    int adminRol = 1;\n\n" +
@@ -898,7 +861,7 @@ namespace KademeliEgitimPlatformu
             Button btnAnalizEt = new()
             {
                 Text = "▶ Yerel Sözdizimi Kontrolcüsünü Çalıştır",
-                Font = Yazi(11f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 11f, FontStyle.Bold),
                 BackColor = Color.FromArgb(34, 197, 94),
                 ForeColor = Color.FromArgb(15, 23, 42),
                 FlatStyle = FlatStyle.Flat,
@@ -907,24 +870,16 @@ namespace KademeliEgitimPlatformu
                 Cursor = Cursors.Hand
             };
             btnAnalizEt.FlatAppearance.BorderSize = 0;
-            btnAnalizEt.Click += AnalizEt_Click;
 
             _lblSimulatorSonuc = new()
             {
-                Text = "⚠️ Yerel Sözdizimi Kontrolcüsü Bekliyor...\n• 'if (kullaniciRol = adminRol);' satırında gizli noktalı virgül tuzağı ve hatalı atama tespit edildi.",
-                Font = Yazi(10.5f),
+                Text = "⚠️ Yerel Sözdizimi Kontrolcüsü Bekliyor...\n• Satır 9: 'if (kullaniciRol = adminRol);' satırında gizli noktalı virgül tuzağı ve hatalı atama tespit edildi.",
+                Font = new Font("Segoe UI", 10.5f),
                 ForeColor = Color.FromArgb(251, 146, 60),
                 BackColor = Color.FromArgb(43, 27, 23),
                 Padding = new Padding(14),
                 Dock = DockStyle.Fill
             };
-
-            solIzgara.Controls.Add(lblSimBaslik, 0, 0);
-            solIzgara.Controls.Add(lblSimYonerge, 0, 1);
-            solIzgara.Controls.Add(_txtSimulatorKod, 0, 2);
-            solIzgara.Controls.Add(btnAnalizEt, 0, 3);
-            solIzgara.Controls.Add(_lblSimulatorSonuc, 0, 4);
-            pnlSol.Controls.Add(solIzgara);
 
             // SAĞ PANEL: Hata Karnesi ve Rozetler
             Panel pnlSag = CerceveliPanelOlustur(Color.FromArgb(139, 92, 246), Color.FromArgb(22, 32, 50), 1);
@@ -945,13 +900,49 @@ namespace KademeliEgitimPlatformu
             sagIzgara.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             sagIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
 
-            Label lblKarneBaslik = new() { Text = "📊 Çevrimdışı Hata Karnesi & Beceri Düzeyleri", Font = Yazi(13.5f, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill };
-            _lblBeceri1 = new() { Font = Yazi(11f, FontStyle.Bold), ForeColor = Color.FromArgb(20, 184, 166), Dock = DockStyle.Fill };
-            _lblBeceri2 = new() { Font = Yazi(11f, FontStyle.Bold), ForeColor = Color.FromArgb(245, 158, 11), Dock = DockStyle.Fill };
-            _lblBeceri3 = new() { Font = Yazi(11f, FontStyle.Bold), ForeColor = Color.FromArgb(236, 72, 153), Dock = DockStyle.Fill };
-            KarneyiGuncelle();
+            Label lblKarneBaslik = new() { Text = "📊 Çevrimdışı Hata Karnesi & Beceri Düzeyleri", Font = new Font("Segoe UI", 13.5f, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill };
+            Label lblBeceri1 = new() { Text = $"• Görsel Programlama Yetkinliği: %{_gorselBasari}", Font = new Font("Segoe UI", 11f, FontStyle.Bold), ForeColor = Color.FromArgb(20, 184, 166), Dock = DockStyle.Fill };
+            Label lblBeceri2 = new() { Text = $"• Veri Tabanları Yetkinliği: %{_veriTabaniBasari}", Font = new Font("Segoe UI", 11f, FontStyle.Bold), ForeColor = Color.FromArgb(245, 158, 11), Dock = DockStyle.Fill };
+            Label lblBeceri3 = new() { Text = $"• Siber Güvenlik Yetkinliği: %{_siberBasari}   |   🔑 İpucu Jetonu: {_ipucuJetonu}", Font = new Font("Segoe UI", 11f, FontStyle.Bold), ForeColor = Color.FromArgb(236, 72, 153), Dock = DockStyle.Fill };
 
-            Label lblRozetBaslik = new() { Text = "🏆 Kazanılan Yerel Oyunlaştırma Rozetleri", Font = Yazi(13.5f, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill };
+            btnAnalizEt.Click += (s, e) =>
+            {
+                string kod = _txtSimulatorKod.Text;
+                bool esittirDuzeldi = Regex.IsMatch(kod, @"if\s*\(\s*kullaniciRol\s*==\s*adminRol\s*\)");
+                bool noktaliVirgulVar = Regex.IsMatch(kod, @"if\s*\([^)]*\)\s*;");
+
+                if (!noktaliVirgulVar && esittirDuzeldi)
+                {
+                    _lblSimulatorSonuc.BackColor = Color.FromArgb(20, 50, 35);
+                    _lblSimulatorSonuc.ForeColor = Color.FromArgb(74, 222, 128);
+                    _lblSimulatorSonuc.Text = "✓ DERLEME BAŞARILI (0 Hata, 0 Uyarı)\n\nTebrikler! Hem 'if' sonundaki gizli noktalı virgül tuzağını hem de '==' karşılaştırma operatörünü başarıyla düzelttiniz. 'Hata Avcısı' rozeti kazanıldı!";
+
+                    if (!_simulatorOduluAlindi)
+                    {
+                        _simulatorOduluAlindi = true;
+                        _siberBasari = Math.Min(100, _siberBasari + 25);
+                        lblBeceri3.Text = $"• Siber Güvenlik Yetkinliği: %{_siberBasari}   |   🔑 İpucu Jetonu: {_ipucuJetonu}";
+                        KaliciIlerlemeyiKaydet(); // SQLite ilerleme.db'ye kaydet!
+                    }
+                }
+                else
+                {
+                    _lblSimulatorSonuc.BackColor = Color.FromArgb(69, 26, 26);
+                    _lblSimulatorSonuc.ForeColor = Color.FromArgb(252, 165, 165);
+                    _lblSimulatorSonuc.Text = "✕ SÖZDİZİMİ HATASI DEVAM EDİYOR:\n" +
+                        (noktaliVirgulVar ? "• 'if' parantezinin sonundaki ';' karakterini silmelisiniz.\n" : "") +
+                        (!esittirDuzeldi ? "• Koşul içinde '=' yerine '==' karşılaştırma operatörü kullanmalısınız." : "");
+                }
+            };
+
+            solIzgara.Controls.Add(lblSimBaslik, 0, 0);
+            solIzgara.Controls.Add(lblSimYonerge, 0, 1);
+            solIzgara.Controls.Add(_txtSimulatorKod, 0, 2);
+            solIzgara.Controls.Add(btnAnalizEt, 0, 3);
+            solIzgara.Controls.Add(_lblSimulatorSonuc, 0, 4);
+            pnlSol.Controls.Add(solIzgara);
+
+            Label lblRozetBaslik = new() { Text = "🏆 Kazanılan Yerel Oyunlaştırma Rozetleri", Font = new Font("Segoe UI", 13.5f, FontStyle.Bold), ForeColor = Color.White, Dock = DockStyle.Fill };
 
             TableLayoutPanel rozetIzgara = new()
             {
@@ -972,7 +963,7 @@ namespace KademeliEgitimPlatformu
             Button btnKarneIndir = new()
             {
                 Text = "💾 Çevrimdışı Hata Karnesini (.txt) Masaüstüne Kaydet",
-                Font = Yazi(10.5f, FontStyle.Bold),
+                Font = new Font("Segoe UI", 10.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(37, 99, 235),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
@@ -981,12 +972,32 @@ namespace KademeliEgitimPlatformu
                 Cursor = Cursors.Hand
             };
             btnKarneIndir.FlatAppearance.BorderSize = 0;
-            btnKarneIndir.Click += KarneKaydet_Click;
+            btnKarneIndir.Click += (s, e) =>
+            {
+                try
+                {
+                    string raporYolu = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "Cevrimdisi_Hata_Karnesi.txt");
+                    File.WriteAllText(raporYolu,
+                        "=== KADEMELİ BİLİŞİM VE SİBER GÜVENLİK EĞİTİM PLATFORMU ===\n" +
+                        $"Rapor Tarihi: {DateTime.Now}\n\n" +
+                        $"Görsel Programlama Başarısı: %{_gorselBasari}\n" +
+                        $"Veri Tabanları Başarısı: %{_veriTabaniBasari}\n" +
+                        $"Siber Güvenlik Başarısı: %{_siberBasari}\n" +
+                        $"Kalan İpucu Jetonu: {_ipucuJetonu}\n" +
+                        $"Hata Avcısı Rozeti: {(_simulatorOduluAlindi ? "Kazanıldı" : "Henüz Kazanılmadı")}\n" +
+                        "Durum: %100 Çevrimdışı SQLite Yerel Doğrulama Tamamlandı.");
+                    MessageBox.Show($"Hata karneniz masaüstüne kaydedildi:\n{raporYolu}", "Rapor Kaydedildi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Rapor kaydedilemedi:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+            };
 
             sagIzgara.Controls.Add(lblKarneBaslik, 0, 0);
-            sagIzgara.Controls.Add(_lblBeceri1, 0, 1);
-            sagIzgara.Controls.Add(_lblBeceri2, 0, 2);
-            sagIzgara.Controls.Add(_lblBeceri3, 0, 3);
+            sagIzgara.Controls.Add(lblBeceri1, 0, 1);
+            sagIzgara.Controls.Add(lblBeceri2, 0, 2);
+            sagIzgara.Controls.Add(lblBeceri3, 0, 3);
             sagIzgara.Controls.Add(lblRozetBaslik, 0, 4);
             sagIzgara.Controls.Add(rozetIzgara, 0, 5);
             sagIzgara.Controls.Add(btnKarneIndir, 0, 6);
@@ -1006,85 +1017,11 @@ namespace KademeliEgitimPlatformu
             Panel p = CerceveliPanelOlustur(renk, Color.FromArgb(15, 23, 42), 1);
             p.Margin = new Padding(6);
             p.Padding = new Padding(12);
-            Label l2 = new() { Text = aciklama, Font = Yazi(9.5f), ForeColor = Color.FromArgb(203, 213, 225), Dock = DockStyle.Fill };
-            Label l1 = new() { Text = ad, Font = Yazi(10.5f, FontStyle.Bold), ForeColor = renk, Dock = DockStyle.Top, Height = 26 };
+            Label l2 = new() { Text = aciklama, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(203, 213, 225), Dock = DockStyle.Fill };
+            Label l1 = new() { Text = ad, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), ForeColor = renk, Dock = DockStyle.Top, Height = 26 };
             p.Controls.Add(l2);
             p.Controls.Add(l1);
             return p;
-        }
-
-        /// <summary>Karne etiketlerini güncel skorlarla yeniler (editörü sıfırlamadan).</summary>
-        private void KarneyiGuncelle()
-        {
-            _lblBeceri1.Text = $"• Görsel Programlama Yetkinliği: %{_gorselBasari}";
-            _lblBeceri2.Text = $"• Veri Tabanları Yetkinliği: %{_veriTabaniBasari}";
-            _lblBeceri3.Text = $"• Siber Güvenlik Yetkinliği: %{_siberBasari}   |   🔑 İpucu Jetonu: {_ipucuJetonu}";
-        }
-
-        // ==================== SİMÜLATÖR KONTROLCÜSÜ ====================
-        private void AnalizEt_Click(object? sender, EventArgs e)
-        {
-            string kod = _txtSimulatorKod.Text;
-
-            // [Regex] Boşluk farklarına dayanıklı kontrol: "if (...) ;" kalıbı hâlâ var mı?
-            bool noktaliVirgulKalkti = !Regex.IsMatch(kod, @"\bif\s*\([^)]*\)\s*;");
-            // "kullaniciRol == adminRol" doğru yazılmış mı?
-            bool esittirDuzeldi = Regex.IsMatch(kod, @"\bif\s*\(\s*kullaniciRol\s*==\s*adminRol\s*\)");
-
-            if (noktaliVirgulKalkti && esittirDuzeldi)
-            {
-                _lblSimulatorSonuc.BackColor = Color.FromArgb(20, 50, 35);
-                _lblSimulatorSonuc.ForeColor = Color.FromArgb(74, 222, 128);
-
-                // [DÜZELTME 3] Puan sadece ilk başarıda verilir
-                if (!_hataAvcisiKazanildi)
-                {
-                    _hataAvcisiKazanildi = true;
-                    _siberBasari = Math.Min(100, _siberBasari + 25);
-                    KarneyiGuncelle();
-
-                    _lblSimulatorSonuc.Text = "✓ DERLEME BAŞARILI (0 Hata, 0 Uyarı)\n\nTebrikler! Hem 'if' sonundaki gizli noktalı virgül tuzağını hem de '==' karşılaştırma operatörünü başarıyla düzelttiniz. 'Hata Avcısı' rozeti kazanıldı! (+25 Siber Güvenlik)";
-                }
-                else
-                {
-                    _lblSimulatorSonuc.Text = "✓ DERLEME BAŞARILI (0 Hata, 0 Uyarı)\n\nKod doğru. 'Hata Avcısı' rozetini zaten kazandığınız için ek puan verilmedi.";
-                }
-            }
-            else
-            {
-                _lblSimulatorSonuc.BackColor = Color.FromArgb(69, 26, 26);
-                _lblSimulatorSonuc.ForeColor = Color.FromArgb(252, 165, 165);
-                _lblSimulatorSonuc.Text = "✕ SÖZDİZİMİ HATASI DEVAM EDİYOR:\n" +
-                    (!noktaliVirgulKalkti ? "• 'if' parantezinin sonundaki ';' karakterini silmelisiniz.\n" : "") +
-                    (!esittirDuzeldi ? "• Koşul içinde '=' yerine '==' karşılaştırma operatörü kullanmalısınız." : "");
-            }
-        }
-
-        private void KarneKaydet_Click(object? sender, EventArgs e)
-        {
-            try
-            {
-                string raporYolu = Path.Combine(
-                    Environment.GetFolderPath(Environment.SpecialFolder.Desktop),
-                    "Cevrimdisi_Hata_Karnesi.txt");
-
-                File.WriteAllText(raporYolu,
-                    "=== KADEMELİ BİLİŞİM VE SİBER GÜVENLİK EĞİTİM PLATFORMU ===\n" +
-                    $"Rapor Tarihi: {DateTime.Now}\n\n" +
-                    $"Görsel Programlama Başarısı: %{_gorselBasari}\n" +
-                    $"Veri Tabanları Başarısı: %{_veriTabaniBasari}\n" +
-                    $"Siber Güvenlik Başarısı: %{_siberBasari}\n" +
-                    $"Kalan İpucu Jetonu: {_ipucuJetonu}\n" +
-                    "Durum: %100 Çevrimdışı Yerel Doğrulama Tamamlandı.");
-
-                MessageBox.Show($"Hata karneniz masaüstüne kaydedildi:\n{raporYolu}", "Rapor Kaydedildi", MessageBoxButtons.OK, MessageBoxIcon.Information);
-            }
-            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
-            {
-                MessageBox.Show(
-                    $"Karne kaydedilemedi (yazma izni yok veya masaüstü yolu erişilemiyor):\n{ex.Message}",
-                    "Kaydetme Hatası", MessageBoxButtons.OK, MessageBoxIcon.Error);
-            }
         }
 
         // ==================== ETKİLEŞİM METOTLARI ====================
@@ -1096,23 +1033,26 @@ namespace KademeliEgitimPlatformu
                 Filter = "JSON Soru Paketi (*.json)|*.json"
             };
 
-            if (ofd.ShowDialog() != DialogResult.OK) return;
-
-            try
+            if (ofd.ShowDialog() == DialogResult.OK)
             {
-                int eklenen = _soruServisi.DisaridanPaketYukle(ofd.FileName);
-                MessageBox.Show(
-                    $"Paket başarıyla tarandı!\n\nYeni Eklenen Soru Sayısı: {eklenen}\nToplam Soru Havuzu: {_soruServisi.TumSorulariGetir().Count}",
-                    "Çevrimdışı Paket Yükleme Başarılı",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                try
+                {
+                    int eklenen = _soruServisi.DisaridanPaketYukle(ofd.FileName);
+                    string atlananBilgi = _soruServisi.SonPaketAtlananSayisi > 0
+                        ? $"\nGeçersiz Olduğu İçin Atlanan: {_soruServisi.SonPaketAtlananSayisi}"
+                        : "";
 
-                // Tıklanan buton yeniden çizimde Dispose edileceği için çizimi olay bittikten sonraya erteliyoruz
-                BeginInvoke(new Action(AnaMenuyuCiz));
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"Paket yüklenirken format hatası oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    MessageBox.Show(
+                        $"Paket SQLite veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {_soruServisi.TumSorulariGetir().Count}",
+                        "Çevrimdışı Paket Yükleme Başarılı",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    AnaMenuyuCiz();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Paket yüklenirken format hatası oluştu:\n{ex.Message}", "Hata", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -1139,37 +1079,27 @@ namespace KademeliEgitimPlatformu
             _ipucuJetonu--;
             _lblJetonSayaci.Text = $"🔑 İpucu Jetonu: {_ipucuJetonu}   ";
             _btnIpucuKullan.Enabled = false;
+            KaliciIlerlemeyiKaydet(); // Jeton harcandığında SQLite'a kaydet
         }
 
         private void SinaviBaslat(DisiplinTuru? disiplin, string baslik)
         {
-            var kaynak = disiplin.HasValue
+            _aktifDisiplin = disiplin;
+            _aktifSorular = disiplin.HasValue
                 ? _soruServisi.SorulariFiltrele(disiplin.Value)
                 : _soruServisi.TumSorulariGetir();
 
-            // [DÜZELTME 5] Bozuk sorular (4 şık yok, doğru indeks aralık dışı vb.) elenir
-            _aktifSorular = kaynak.Where(SoruGecerliMi).ToList();
-
-            int atlanan = kaynak.Count - _aktifSorular.Count;
-            if (atlanan > 0)
-            {
-                MessageBox.Show(
-                    $"{atlanan} soru biçim hatası nedeniyle atlandı (4 şık ve geçerli doğru cevap indeksi gerekir).",
-                    "Uyarı", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-            }
-
             if (_aktifSorular.Count == 0)
             {
-                MessageBox.Show("Bu modülde henüz geçerli soru bulunamadı!", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show("Bu modülde henüz soru bulunamadı!", "Bilgi", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 return;
             }
 
-            _aktifDisiplin = disiplin;
             _mevcutSoruIndex = 0;
             _dogruSayisi = 0;
             _gecenSaniye = 0;
-            _lblSureSayaci.Text = "⏱️ 00:00   ";
             _lblDisiplinBaslik.Text = baslik;
+            _lblSureSayaci.Text = "⏱️ 00:00   ";
 
             EkranDegistir("SINAV");
             _sinavTimer.Start();
@@ -1184,15 +1114,15 @@ namespace KademeliEgitimPlatformu
             _lblSoruMetni.Text = soru.Baslik;
             _txtKodBlogu.Text = soru.KodBlogu ?? "// Bu soru için kod bloğu bulunmamaktadır.";
 
-            // [DÜZELTME 4] Satır numaraları kodun gerçek satır sayısına göre üretilir
-            int satirSayisi = Math.Max(1, _txtKodBlogu.Lines.Length);
-            _lblKodSatirNo.Text = string.Join("\n", Enumerable.Range(1, satirSayisi));
+            int satirSayisi = Math.Max(1, _txtKodBlogu.Text.Split('\n').Length);
+            var satirlar = new string[satirSayisi];
+            for (int s = 0; s < satirSayisi; s++) satirlar[s] = (s + 1).ToString();
+            _lblKodSatirNo.Text = string.Join("\n", satirlar);
 
             string[] harfler = { "A", "B", "C", "D" };
-            var secenekler = soru.Secenekler.ToList();
             for (int i = 0; i < 4; i++)
             {
-                _secenekButonlari[i].Text = $"{harfler[i]})  {secenekler[i]}";
+                _secenekButonlari[i].Text = $"{harfler[i]})  {soru.Secenekler[i]}";
                 _secenekButonlari[i].BackColor = Color.FromArgb(24, 34, 52);
                 _secenekButonlari[i].FlatAppearance.BorderColor = Color.FromArgb(51, 65, 85);
                 _secenekButonlari[i].Enabled = true;
@@ -1211,7 +1141,6 @@ namespace KademeliEgitimPlatformu
                 btn.Enabled = false;
             _btnIpucuKullan.Enabled = false;
 
-            // Doğru şıkkı yeşil yak
             _secenekButonlari[soru.DogruSecenekIndex].BackColor = Color.FromArgb(20, 83, 45);
             _secenekButonlari[soru.DogruSecenekIndex].FlatAppearance.BorderColor = Color.FromArgb(34, 197, 94);
 
@@ -1234,16 +1163,10 @@ namespace KademeliEgitimPlatformu
                 _lblNedenYanlisBaslik.ForeColor = Color.FromArgb(251, 146, 60);
                 _lblNedenYanlisAciklama.ForeColor = Color.FromArgb(254, 215, 170);
 
-                // Sözlük null gelse bile çökmez
-                if (soru.YanlisCevapAciklamalari?.TryGetValue(secilenIndex, out string? aciklama) == true
-                    && !string.IsNullOrWhiteSpace(aciklama))
-                {
+                if (soru.YanlisCevapAciklamalari.TryGetValue(secilenIndex, out string? aciklama))
                     _lblNedenYanlisAciklama.Text = aciklama;
-                }
                 else
-                {
                     _lblNedenYanlisAciklama.Text = "Seçtiğiniz şık bu senaryo için uygun değildir. Yeşil işaretli doğru cevabı inceleyiniz.";
-                }
             }
 
             _pnlNedenYanlis.Visible = true;
@@ -1256,19 +1179,13 @@ namespace KademeliEgitimPlatformu
             if (_mevcutSoruIndex < _aktifSorular.Count)
             {
                 SoruyuEkranaYukle();
-                return;
             }
-
-            // Sınav bitti
-            _sinavTimer.Stop();
-            double basariOrani = (double)_dogruSayisi / _aktifSorular.Count * 100;
-            bool barajGecildi = basariOrani >= 75;
-
-            if (barajGecildi)
+            else
             {
-                int yuzde = (int)basariOrani;
+                _sinavTimer.Stop();
+                double basariOrani = (double)_dogruSayisi / _aktifSorular.Count * 100;
+                int yuzde = (int)Math.Round(basariOrani);
 
-                // [DÜZELTME 2] Skor sadece çözülen disipline yazılır
                 switch (_aktifDisiplin)
                 {
                     case DisiplinTuru.GorselProgramlama:
@@ -1281,23 +1198,30 @@ namespace KademeliEgitimPlatformu
                         _siberBasari = Math.Max(_siberBasari, yuzde);
                         break;
                     default:
-                        // Karma sınav: tek bir disipline yazılmaz
+                        _gorselBasari = Math.Max(_gorselBasari, yuzde);
+                        _veriTabaniBasari = Math.Max(_veriTabaniBasari, yuzde);
+                        _siberBasari = Math.Max(_siberBasari, yuzde);
                         break;
                 }
-                _ipucuJetonu++;
+
+                if (basariOrani >= 75)
+                    _ipucuJetonu++;
+
+                // Yeni başarı yüzdelerini ve jetonu SQLite ilerleme.db'ye kalıcı kaydet!
+                KaliciIlerlemeyiKaydet();
+
+                string barajMesaji = basariOrani >= 75
+                    ? "🎉 TEBRİKLER! %75 Başarı Barajını geçtiniz, Orta Mod kilidi açıldı ve +1 İpucu Jetonu SQLite profilinize kaydedildi!"
+                    : "⚠️ %75 Başarı Barajının altında kaldınız. Orta moda geçmek için yanlış açıklamalarını tekrar gözden geçirin.";
+
+                MessageBox.Show(
+                    $"Sınav Tamamlandı!\n\nDoğru Sayısı: {_dogruSayisi} / {_aktifSorular.Count}\nGeçen Süre: {_gecenSaniye} saniye\nBaşarı Yüzdesi: %{basariOrani:0}\n\n{barajMesaji}",
+                    "Çevrimdışı Hata Karnesi ve Sonuç",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                EkranDegistir("ANA");
             }
-
-            string barajMesaji = barajGecildi
-                ? "🎉 TEBRİKLER! %75 Başarı Barajını geçtiniz, Orta Mod kilidi açıldı ve +1 İpucu Jetonu kazandınız!"
-                : "⚠️ %75 Başarı Barajının altında kaldınız. Orta moda geçmek için yanlış açıklamalarını tekrar gözden geçirin.";
-
-            MessageBox.Show(
-                $"Sınav Tamamlandı!\n\nDoğru Sayısı: {_dogruSayisi} / {_aktifSorular.Count}\nGeçen Süre: {_gecenSaniye} saniye\nBaşarı Yüzdesi: %{basariOrani:0}\n\n{barajMesaji}",
-                "Çevrimdışı Hata Karnesi ve Sonuç",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
-
-            EkranDegistir("ANA");
         }
     }
 }
