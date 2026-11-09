@@ -6,10 +6,14 @@ using Microsoft.Data.Sqlite;
 namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>Kullanıcının kalıcı olarak saklanacak ilerleme bilgileri.</summary>
+    /// <remarks>
+    /// Varsayılan değerler sıfırdır: yeni kullanıcı, hiç soru çözmeden
+    /// kazanmadığı bir başarı yüzdesiyle başlamaz.
+    /// </remarks>
     public record IlerlemeDurumu(
-        int GorselBasari = 65,
-        int VeriTabaniBasari = 40,
-        int SiberBasari = 10,
+        int GorselBasari = 0,
+        int VeriTabaniBasari = 0,
+        int SiberBasari = 0,
         int IpucuJetonu = 3,
         bool HataAvcisiKazanildi = false);
 
@@ -23,7 +27,7 @@ namespace KademeliEgitimPlatformu.Services
 
         public IlerlemeServisi(string? dosyaYolu = null)
         {
-            dosyaYolu ??= Path.Combine(AppContext.BaseDirectory, "Data", "ilerleme.db");
+            dosyaYolu ??= VeriYolu.IlerlemeVeritabaniYolu;
             Directory.CreateDirectory(Path.GetDirectoryName(dosyaYolu)!);
 
             _baglantiMetni = new SqliteConnectionStringBuilder { DataSource = dosyaYolu }.ToString();
@@ -59,10 +63,10 @@ namespace KademeliEgitimPlatformu.Services
 
             var v = new IlerlemeDurumu();
             return new IlerlemeDurumu(
-                degerler.GetValueOrDefault("gorsel", v.GorselBasari),
-                degerler.GetValueOrDefault("veritabani", v.VeriTabaniBasari),
-                degerler.GetValueOrDefault("siber", v.SiberBasari),
-                degerler.GetValueOrDefault("jeton", v.IpucuJetonu),
+                Math.Clamp(degerler.GetValueOrDefault("gorsel", v.GorselBasari), 0, 100),
+                Math.Clamp(degerler.GetValueOrDefault("veritabani", v.VeriTabaniBasari), 0, 100),
+                Math.Clamp(degerler.GetValueOrDefault("siber", v.SiberBasari), 0, 100),
+                Math.Max(0, degerler.GetValueOrDefault("jeton", v.IpucuJetonu)),
                 degerler.GetValueOrDefault("hataAvcisi", 0) == 1);
         }
 
