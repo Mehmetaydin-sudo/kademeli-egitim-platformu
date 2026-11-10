@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - "gelistirme/**"
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  derle-ve-test:
+    name: Derle ve Test Et
+    runs-on: windows-latest
+
+    steps:
+      - name: Kaynak kodu çek
+        uses: actions/checkout@v4
+
+      - name: .NET 8 kur
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Bağımlılıkları geri yükle
+        run: dotnet restore tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
+
+      - name: Release derlemesi
+        run: dotnet build KademeliEgitimPlatformu.csproj -c Release --no-restore
+
+      - name: Testleri çalıştır
+        run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Test sonuçlarını yükle
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: "**/TestResults/*.trx"
+          if-no-files-found: ignore

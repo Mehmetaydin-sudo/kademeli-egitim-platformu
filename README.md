@@ -20,11 +20,15 @@ Ortaöğretim ve ön lisans öğrencileri için **%100 çevrimdışı (offline)*
   * **Orta Mod** — en az bir modülde **%75 başarı** ile açılır (kilit gerçekten uygulanır, yalnızca görsel değildir).
   * **Zor Mod** — gizli sözdizimi tuzaklarını içeren gömülü kod simülatörüdür.
 * **Pedagojik "Neden Yanlış" Paneli:** Yanlış şık seçildiğinde hatanın kaynağını sade bir dille anında açıklar.
-* **Gömülü Kod Simülatörü:** Editördeki C# kod bloğunu yerel Regex kurallarıyla denetler (iki tanımlı tuzak: `if (...)` sonundaki `;` ve `=` / `==` karışıklığı).
+* **Gömülü Kod Simülatörü (Roslyn):** Editördeki C# kodunu gerçek Roslyn derleyicisiyle, tamamen çevrimdışı denetler. Hatalar satır/sütun numarası ve Türkçe pedagojik ipuçlarıyla listelenir; sabit iki kalıba bağlı değildir.
 * **Güvenli USB Paket Yükleme:** İnternetsiz ortamlarda dışarıdan `.json` soru paketlerini şema doğrulaması (`SoruGecerliMi`) ve 5 MB boyut sınırıyla SQLite veri tabanına aktarır. Hatalı JSON için anlaşılır hata mesajı üretir.
-* **Kalıcı Oyunlaştırma:** Cihaz içi SQLite profilinde korunan başarı yüzdeleri, ipucu jetonları ve rozetler; masaüstüne indirilebilir `.txt` özet karne raporu.
+* **Kalıcı Oyunlaştırma:** Cihaz içi SQLite profilinde korunan başarı yüzdeleri, ipucu jetonları ve rozetler; masaüstüne indirilebilir `.txt` hata karnesi.
+* **Soru Bazlı Hata Karnesi:** Yanlış cevaplar (soru, seçilen cevap, doğru cevap ve açıklama) `ilerleme.db` içindeki `YanlisCevaplar` tablosunda saklanır; karne son oturumla sınırlı değildir (en yeni 300 kayıt).
 * **Disiplin Bazlı Puanlama:** Karma sınavda her disiplin kendi sorularından ayrı değerlendirilir; bir modülün yüzdesi diğerlerini ezmez.
-* **Soru Karıştırma:** Her sınavda soru sırası rastgelelenir (ezberlemeyi zorlaştırır).
+* **Soru ve Şık Karıştırma:** Her sınavda soru sırası ve şıklar rastgelelenir; doğru cevap ve yanlış açıklamaları yeni sıraya birlikte taşınır (ezberleme önlenir).
+* **Klavye Kısayolları:** Sınav sırasında `1`–`4` tuşlarıyla şık seçilir, `Enter` ile sonraki soruya geçilir.
+* **Font Önbelleği:** Arayüz fontları `ConcurrentDictionary` tabanlı önbellekten alınır; ekran çizimlerinde GDI+ tutamacı sızıntısı oluşmaz.
+* **Otomatik Testler ve CI:** xUnit test paketi ve GitHub Actions iş akışı; her push'ta Release derlemesi ve testler çalışır.
 * **Dayanıklı Veri Konumu:** Uygulama klasörü yazılabilirse veriler orada (`Data/`), değilse `%LOCALAPPDATA%\KademeliEgitimPlatformu\Data` altında tutulur. Böylece Program Files kurulumlarında yönetici izni gerekmez.
 * **Soru Havuzu Senkronizasyonu:** `Data/Sorular.json` her açılışta veritabanıyla senkronize edilir; yeni sorular eklenir, aynı başlıklı sorular güncellenir.
 
@@ -91,20 +95,51 @@ KademeliEgitimPlatformu/
 ├── Data/
 │   └── Sorular.json          # Başlangıç soru havuzu
 ├── Models/
-│   └── Soru.cs               # Soru, DisiplinTuru, ZorlukSeviyesi
+│   ├── Soru.cs               # Soru, DisiplinTuru, ZorlukSeviyesi
+│   ├── SoruGorunumu.cs       # Şık karıştırma + doğru cevap/açıklama eşlemesi
+│   └── YanlisKaydi.cs        # Hata karnesi kaydı
 ├── Services/
 │   ├── SoruServisi.cs        # SQLite soru havuzu + paket yükleme + senkronizasyon
 │   ├── IlerlemeServisi.cs    # Kalıcı kullanıcı ilerlemesi (ilerleme.db)
+│   ├── KarneServisi.cs       # Yanlış cevap kayıtları + karne raporu
+│   ├── PuanlamaServisi.cs    # Disiplin bazlı puanlama (saf fonksiyonlar)
+│   ├── SimulatorServisi.cs   # Roslyn tabanlı çevrimdışı kod analizi
+│   ├── FontOnbellegi.cs      # GDI+ font önbelleği
 │   └── VeriYolu.cs           # Yazılabilir veri klasörünü belirler
-├── Form1.cs                  # Arayüz ve ekran akışı
+├── Form1.cs                  # Çekirdek form, sidebar, ekran geçişi, kısayollar
+├── Form1.AnaMenu.cs          # Kontrol paneli, modül/zorluk kartları, USB paket yükleme
+├── Form1.Sinav.cs            # Sınav akışı, şık karıştırma, puanlama
+├── Form1.Simulator.cs        # Roslyn simülatörü ve hata karnesi
 ├── Form1.Designer.cs
 ├── Program.cs                # Giriş noktası + genel hata yakalama
+├── tests/
+│   └── KademeliEgitimPlatformu.Tests/   # xUnit testleri
+├── .github/workflows/ci.yml  # GitHub Actions derleme + test
 └── KademeliEgitimPlatformu.csproj
+```
+
+### Testleri çalıştırma
+```bash
+dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
 ```
 
 ---
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+
+### [v0.5.0] — 2026-11-11
+* **[Eklendi]** Kod simülatörü Regex tahmininden **gerçek Roslyn derleyicisine** (`Microsoft.CodeAnalysis.CSharp`) taşındı. Hatalar satır/sütun bilgisiyle ve kararlı tanı kodlarına (CS1002, CS0029, CS0165 vb.) dayalı Türkçe ipuçlarıyla gösterilir.
+* **[Eklendi]** Soru bazlı kalıcı hata karnesi: yanlış cevaplar `ilerleme.db` içindeki `YanlisCevaplar` tablosuna yazılır (en yeni 300 kayıt). `.txt` raporu artık soru metnini, seçilen cevabı, doğru cevabı ve açıklamayı içerir; UTF-8 BOM ile kaydedilir.
+* **[Eklendi]** Şıklar her sınavda karıştırılır; `SoruGorunumu` doğru cevap indeksini ve yanlış açıklamalarını yeni sıraya taşır.
+* **[Eklendi]** Sınavda `1`–`4` tuşlarıyla şık seçimi ve `Enter` ile sonraki soru kısayolları.
+* **[Eklendi]** xUnit test paketi (41 test: puanlama, karne, ilerleme, şık karıştırma, Roslyn analizi, `SoruGecerliMi`, Form1 smoke) ve GitHub Actions CI iş akışı.
+* **[Geliştirildi]** `Form1.cs` partial class olarak ekranlara bölündü: `Form1.AnaMenu.cs`, `Form1.Sinav.cs`, `Form1.Simulator.cs`. Davranış korunurken bakım maliyeti düştü.
+* **[Geliştirildi]** İş mantığı arayüzden ayrıldı: `PuanlamaServisi`, `KarneServisi`, `SimulatorServisi`, `FontOnbellegi`.
+* **[Düzeltildi]** Her ekran çiziminde yeni `Font` nesnesi oluşturulmasından kaynaklanan GDI+ tutamacı sızıntısı, `ConcurrentDictionary` tabanlı font önbelleğiyle giderildi.
+* **[Düzeltildi]** Simülatör kodu ekran geçişlerinde artık kaybolmuyor; analiz sonucu ve renk durumu korunuyor.
+* **[Düzeltildi]** Roslyn tanı mesajları sistem diline göre yerelleştiği için ipucu eşlemesi mesaj metni yerine tanı koduna bağlandı.
+* **[Düzeltildi]** USB paket yüklemede `FileNotFoundException`, `InvalidDataException` ve `UnauthorizedAccessException` ayrı, anlaşılır mesajlarla ele alınıyor.
+* **[Geliştirildi]** `.slnx` dosyasına test projesi eklendi; sürüm `0.5.0` olarak güncellendi.
 
 ### [v0.4.2] — 2026-11-10
 * **[Düzeltildi]** `YanlisCevapAciklamalari` alanı `null` olan soruların yanlış cevap seçildiğinde `NullReferenceException` ile uygulamayı çökertmesi engellendi; alanlar okuma sırasında normalize ediliyor.
@@ -152,10 +187,8 @@ KademeliEgitimPlatformu/
 ## ⚠️ Bilinen Sınırlar
 
 * Depodaki örnek soru havuzu **3 sorudur** (Kolay 2, Orta 1, Zor 0). Zor seviyede soru eklenene kadar Zor Mod, kod simülatöründen ibarettir.
-* Kod simülatörü gerçek bir C# derleyicisi değildir; iki tanımlı kalıbı Regex ile denetler. Kullanıcı değişken adlarını değiştirirse sonuç yanıltıcı olabilir.
-* "Çevrimdışı Hata Karnesi" yalnızca başarı yüzdelerini özetleyen bir `.txt` raporudur; soru bazlı yanlış dökümü içermez.
-* Arayüzde font önbellekleme yoktur; her ekran çiziminde yeni `Font` nesneleri oluşturulur.
-* Otomatik testler ve CI yapılandırması bulunmamaktadır.
+* Roslyn simülatörü kodu bellek içinde derler ve çalıştırmaz; yalnızca sözdizimi ve tip hatalarını bildirir. 20.000 karakter sınırı ve 5 saniyelik analiz zaman aşımı vardır.
+* Hata karnesi en yeni **300** yanlış kaydı tutar; daha eski kayıtlar otomatik budanır.
 
 ---
 
