@@ -41,6 +41,7 @@ namespace KademeliEgitimPlatformu
             if (!string.IsNullOrWhiteSpace(_txtSimulatorKod.Text))
                 _simulatorKodOnbellek = _txtSimulatorKod.Text;
 
+            _pnlSimulatorVeKarne.SuspendLayout();
             PanelTemizle(_pnlSimulatorVeKarne);
             _pnlSimulatorVeKarne.Dock = DockStyle.Fill;
             _pnlSimulatorVeKarne.Padding = new Padding(40, 28, 40, 28);
@@ -296,6 +297,7 @@ namespace KademeliEgitimPlatformu
             simAnaIzgara.Controls.Add(govdeIzgara, 0, 1);
 
             _pnlSimulatorVeKarne.Controls.Add(simAnaIzgara);
+            _pnlSimulatorVeKarne.ResumeLayout(true);
         }
 
         private Panel RozetKarti(string ad, string aciklama, Color renk)
@@ -323,50 +325,69 @@ namespace KademeliEgitimPlatformu
             return p;
         }
 
-        private void SimulatorAnalizEt_Click(object? sender, EventArgs e)
+        private async void SimulatorAnalizEt_Click(object? sender, EventArgs e)
         {
-            SimulatorSonucu sonuc;
+            string kod = _txtSimulatorKod.Text;
+            Button? btn = sender as Button;
             System.Windows.Forms.Cursor oncekiImlec = this.Cursor;
+
             try
             {
+                if (btn is not null) btn.Enabled = false;
                 this.Cursor = Cursors.WaitCursor;
-                sonuc = _simulatorServisi.Derle(_txtSimulatorKod.Text);
+                _txtSimulatorSonuc.Text = "⏳ Yerel Roslyn derleyicisi çalışıyor...";
+                _txtSimulatorSonuc.BackColor = Color.FromArgb(19, 27, 46);
+                _txtSimulatorSonuc.ForeColor = Color.FromArgb(148, 163, 184);
+
+                // Derleme arka planda yapılır; analiz süresince arayüz donmaz.
+                SimulatorSonucu sonuc = await Task.Run(() => Simulator.Derle(kod));
+
+                _simulatorSonucOnbellek = SimulatorServisi.RaporMetni(sonuc);
+
+                if (sonuc.Basarili)
+                {
+                    _simulatorSonucArka = Color.FromArgb(20, 50, 35);
+                    _simulatorSonucYazi = Color.FromArgb(74, 222, 128);
+
+                    if (!_simulatorOduluAlindi)
+                    {
+                        _simulatorOduluAlindi = true;
+                        _siberBasari = Math.Min(100, _siberBasari + 25);
+                        KaliciIlerlemeyiKaydet();
+
+                        _simulatorSonucOnbellek +=
+                            "\n\n🏆 'Hata Avcısı' rozeti kazanıldı! Siber Güvenlik yetkinliğine +25 puan eklendi.";
+                    }
+                }
+                else
+                {
+                    _simulatorSonucArka = Color.FromArgb(69, 26, 26);
+                    _simulatorSonucYazi = Color.FromArgb(252, 165, 165);
+                }
+
+                _txtSimulatorSonuc.Text = _simulatorSonucOnbellek;
+                _txtSimulatorSonuc.BackColor = _simulatorSonucArka;
+                _txtSimulatorSonuc.ForeColor = _simulatorSonucYazi;
+                _txtSimulatorSonuc.SelectionStart = 0;
+                _txtSimulatorSonuc.ScrollToCaret();
+
+                BeceriEtiketleriniGuncelle();
+            }
+            catch (Exception ex)
+            {
+                // async void olay işleyicisinde beklenmeyen hata uygulamayı kapatmasın.
+                _simulatorSonucOnbellek = "✕ Analiz sırasında beklenmeyen hata: " + ex.Message;
+                _simulatorSonucArka = Color.FromArgb(69, 26, 26);
+                _simulatorSonucYazi = Color.FromArgb(252, 165, 165);
+                _txtSimulatorSonuc.Text = _simulatorSonucOnbellek;
+                _txtSimulatorSonuc.BackColor = _simulatorSonucArka;
+                _txtSimulatorSonuc.ForeColor = _simulatorSonucYazi;
             }
             finally
             {
                 this.Cursor = oncekiImlec;
+                if (btn is not null) btn.Enabled = true;
             }
-
-            _simulatorSonucOnbellek = SimulatorServisi.RaporMetni(sonuc);
-
-            if (sonuc.Basarili)
-            {
-                _simulatorSonucArka = Color.FromArgb(20, 50, 35);
-                _simulatorSonucYazi = Color.FromArgb(74, 222, 128);
-
-                if (!_simulatorOduluAlindi)
-                {
-                    _simulatorOduluAlindi = true;
-                    _siberBasari = Math.Min(100, _siberBasari + 25);
-                    KaliciIlerlemeyiKaydet();
-
-                    _simulatorSonucOnbellek +=
-                        "\n\n🏆 'Hata Avcısı' rozeti kazanıldı! Siber Güvenlik yetkinliğine +25 puan eklendi.";
-                }
-            }
-            else
-            {
-                _simulatorSonucArka = Color.FromArgb(69, 26, 26);
-                _simulatorSonucYazi = Color.FromArgb(252, 165, 165);
-            }
-
-            _txtSimulatorSonuc.Text = _simulatorSonucOnbellek;
-            _txtSimulatorSonuc.BackColor = _simulatorSonucArka;
-            _txtSimulatorSonuc.ForeColor = _simulatorSonucYazi;
-            _txtSimulatorSonuc.SelectionStart = 0;
-            _txtSimulatorSonuc.ScrollToCaret();
-
-            BeceriEtiketleriniGuncelle();
         }
 
         private void BeceriEtiketleriniGuncelle()
@@ -399,7 +420,7 @@ namespace KademeliEgitimPlatformu
                     _gorselBasari, _veriTabaniBasari, _siberBasari, _ipucuJetonu, _simulatorOduluAlindi);
 
                 // Geçmiş tüm yanlış cevaplar (en fazla 300 kayıt) raporda yer alır.
-                var yanlislar = _karneServisi.SonKayitlar(KarneServisi.MaksKayitSayisi);
+                var yanlislar = KarneDeposu.SonKayitlar(KarneServisi.MaksKayitSayisi);
                 string rapor = KarneRaporu.Olustur(durum, yanlislar, raporTarihi: DateTime.Now, surum: Surum);
 
                 // UTF-8 BOM: Windows Not Defteri Türkçe karakterleri doğru gösterir.

@@ -14,6 +14,7 @@ namespace KademeliEgitimPlatformu
         // ==================== 2. SINAV EKRANI ====================
         private void SinavEkraniniCiz()
         {
+            _pnlSinavEkrani.SuspendLayout();
             PanelTemizle(_pnlSinavEkrani);
             _pnlSinavEkrani.Dock = DockStyle.Fill;
             _pnlSinavEkrani.Padding = new Padding(45, 25, 45, 25);
@@ -247,13 +248,14 @@ namespace KademeliEgitimPlatformu
             sinavIzgara.Controls.Add(pnlAlt, 0, 5);
 
             _pnlSinavEkrani.Controls.Add(sinavIzgara);
+            _pnlSinavEkrani.ResumeLayout(true);
         }
 
         private void SinaviBaslat(DisiplinTuru? disiplin, ZorlukSeviyesi? zorluk, string baslik)
         {
             _aktifSorular = disiplin.HasValue
-                ? _soruServisi.SorulariFiltrele(disiplin.Value, zorluk)
-                : _soruServisi.TumSorulariGetir(zorluk);
+                ? SoruDeposu.SorulariFiltrele(disiplin.Value, zorluk)
+                : SoruDeposu.TumSorulariGetir(zorluk);
 
             if (_aktifSorular.Count == 0)
             {
@@ -281,10 +283,13 @@ namespace KademeliEgitimPlatformu
             _mevcutSoruIndex = 0;
             _gecenSaniye = 0;
             _sinavBaslangic = DateTime.Now;
+
+            // Ekran ilk kez gösteriliyorsa kontroller burada oluşturulur;
+            // ardından başlık ve süre etiketleri güvenle güncellenebilir.
+            EkranDegistir("SINAV");
+
             _lblDisiplinBaslik.Text = baslik;
             _lblSureSayaci.Text = "⏱️ 00:00   ";
-
-            EkranDegistir("SINAV");
             _sinavTimer.Start();
             SoruyuEkranaYukle();
         }
@@ -476,7 +481,7 @@ namespace KademeliEgitimPlatformu
             {
                 try
                 {
-                    _karneServisi.Kaydet(_oturumYanlislari);
+                    KarneDeposu.Kaydet(_oturumYanlislari);
                 }
                 catch (Exception)
                 {
