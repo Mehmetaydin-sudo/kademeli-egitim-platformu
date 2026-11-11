@@ -36,8 +36,8 @@ namespace KademeliEgitimPlatformu.Services
 
         private void TabloyuHazirla()
         {
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            SqliteYardimcisi.WalEtkinlestir(baglanti);
 
             using var komut = baglanti.CreateCommand();
             komut.CommandText =
@@ -52,8 +52,7 @@ namespace KademeliEgitimPlatformu.Services
         {
             var degerler = new Dictionary<string, int>();
 
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
 
             using var komut = baglanti.CreateCommand();
             komut.CommandText = "SELECT Anahtar, Deger FROM Ilerleme;";
@@ -73,8 +72,7 @@ namespace KademeliEgitimPlatformu.Services
         /// <summary>İlerlemeyi tek bir transaction içinde kaydeder (ya hepsi yazılır ya hiçbiri).</summary>
         public void Kaydet(IlerlemeDurumu d)
         {
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var islem = baglanti.BeginTransaction();
 
             Yaz(baglanti, islem, "gorsel", d.GorselBasari);

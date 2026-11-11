@@ -2,6 +2,8 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using KademeliEgitimPlatformu.Models;
@@ -20,6 +22,7 @@ namespace KademeliEgitimPlatformu.Services
     public class SoruServisi
     {
         private const long MaksPaketBoyutu = 5 * 1024 * 1024; // 5 MB
+        private const string JsonHashAnahtari = "jsonHash";
 
         private static readonly JsonSerializerOptions JsonSecenekleri = new()
         {
@@ -35,14 +38,18 @@ namespace KademeliEgitimPlatformu.Services
         /// <summary>Son DisaridanPaketYukle çağrısında geçersiz olduğu için atlanan soru sayısı.</summary>
         public int SonPaketAtlananSayisi { get; private set; }
 
-        public SoruServisi()
+        public SoruServisi(string? jsonYolu = null, string? veritabaniYolu = null)
         {
-            Directory.CreateDirectory(VeriYolu.VeriKlasoru);
+            _jsonYolu = jsonYolu ?? VeriYolu.SorularJsonYolu;
+            string dbYolu = veritabaniYolu ?? VeriYolu.SorularVeritabaniYolu;
 
-            _jsonYolu = VeriYolu.SorularJsonYolu;
+            string? dbKlasoru = Path.GetDirectoryName(dbYolu);
+            if (!string.IsNullOrEmpty(dbKlasoru))
+                Directory.CreateDirectory(dbKlasoru);
+
             _baglantiMetni = new SqliteConnectionStringBuilder
             {
-                DataSource = VeriYolu.SorularVeritabaniYolu
+                DataSource = dbYolu
             }.ToString();
 
             TabloyuHazirla();
@@ -50,9 +57,21 @@ namespace KademeliEgitimPlatformu.Services
         }
 
         // ==================== OKUMA ====================
+        /// <summary>
+        /// Yalnızca soru sayısını döndürür. Ana menüde tüm soruları okuyup
+        /// JSON'dan çözmek yerine SQLite'ın COUNT(*) sorgusu kullanılır.
+        /// </summary>
+        public int SoruSayisi()
+        {
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            using var komut = baglanti.CreateCommand();
+            komut.CommandText = "SELECT COUNT(*) FROM Sorular;";
+            return Convert.ToInt32(komut.ExecuteScalar());
+        }
+
         public List<Soru> TumSorulariGetir(ZorlukSeviyesi? zorluk = null)
         {
-            using var baglanti = Ac();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var komut = baglanti.CreateCommand();
 
             komut.CommandText = "SELECT Id, Veri FROM Sorular"
@@ -66,7 +85,7 @@ namespace KademeliEgitimPlatformu.Services
 
         public List<Soru> SorulariFiltrele(DisiplinTuru disiplin, ZorlukSeviyesi? zorluk = null)
         {
-            using var baglanti = Ac();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var komut = baglanti.CreateCommand();
 
             komut.CommandText = "SELECT Id, Veri FROM Sorular WHERE Disiplin = $disiplin"
@@ -114,7 +133,7 @@ namespace KademeliEgitimPlatformu.Services
 
             int eklenen = 0;
 
-            using var baglanti = Ac();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var islem = baglanti.BeginTransaction();
 
             foreach (var soru in yeniSorular)
@@ -180,16 +199,11 @@ namespace KademeliEgitimPlatformu.Services
             return soru;
         }
 
-        private SqliteConnection Ac()
-        {
-            var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
-            return baglanti;
-        }
-
         private void TabloyuHazirla()
         {
-            using var baglanti = Ac();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            SqliteYardimcisi.WalEtkinlestir(baglanti);
+
             using var komut = baglanti.CreateCommand();
             komut.CommandText =
                 "CREATE TABLE IF NOT EXISTS Sorular (" +
@@ -198,14 +212,17 @@ namespace KademeliEgitimPlatformu.Services
                 "  Disiplin INTEGER NOT NULL," +
                 "  Zorluk   INTEGER NOT NULL," +
                 "  Veri     TEXT    NOT NULL);" +
-                "CREATE INDEX IF NOT EXISTS IX_Sorular_Disiplin_Zorluk ON Sorular (Disiplin, Zorluk);";
+                "CREATE INDEX IF NOT EXISTS IX_Sorular_Disiplin_Zorluk ON Sorular (Disiplin, Zorluk);" +
+                "CREATE TABLE IF NOT EXISTS Meta (" +
+                "  Anahtar TEXT PRIMARY KEY," +
+                "  Deger   TEXT NOT NULL);";
             komut.ExecuteNonQuery();
         }
 
         /// <summary>
         /// Data/Sorular.json içeriğini veritabanıyla senkronize eder.
-        /// Sadece boş veritabanında değil, her açılışta çalışır; böylece
-        /// güncellenen sorular mevcut kullanıcılara da ulaşır.
+        /// Dosyanın SHA-256 özeti değişmediyse senkronizasyon tamamen atlanır;
+        /// böylece her açılışta gereksiz JSON çözümleme ve yazma yapılmaz.
         /// </summary>
         private void JsondanSenkronizeEt()
         {
@@ -214,23 +231,52 @@ namespace KademeliEgitimPlatformu.Services
 
             try
             {
-                var sorular = JsonSerializer.Deserialize<List<Soru>>(
-                                  File.ReadAllText(_jsonYolu), JsonSecenekleri)
+                string json = File.ReadAllText(_jsonYolu);
+                string hash = Convert.ToHexString(
+                    SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+
+                using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+                if (HashAyniMi(baglanti, hash))
+                    return;
+
+                var sorular = JsonSerializer.Deserialize<List<Soru>>(json, JsonSecenekleri)
                               ?? new List<Soru>();
 
-                using var baglanti = Ac();
-                using var islem = baglanti.BeginTransaction();
-                foreach (var soru in sorular)
+                using (var islem = baglanti.BeginTransaction())
                 {
-                    if (SoruGecerliMi(Normallestir(soru)))
-                        SoruEkleVeyaGuncelle(baglanti, islem, soru);
+                    foreach (var soru in sorular)
+                    {
+                        if (SoruGecerliMi(Normallestir(soru)))
+                            SoruEkleVeyaGuncelle(baglanti, islem, soru);
+                    }
+                    islem.Commit();
                 }
-                islem.Commit();
+
+                HashKaydet(baglanti, hash);
             }
             catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
             {
                 // Bozuk veya okunamayan başlangıç dosyası: havuz mevcut haliyle devam eder, uygulama çökmez.
             }
+        }
+
+        private static bool HashAyniMi(SqliteConnection baglanti, string hash)
+        {
+            using var komut = baglanti.CreateCommand();
+            komut.CommandText = "SELECT Deger FROM Meta WHERE Anahtar = $anahtar;";
+            komut.Parameters.AddWithValue("$anahtar", JsonHashAnahtari);
+            return string.Equals(komut.ExecuteScalar() as string, hash, StringComparison.Ordinal);
+        }
+
+        private static void HashKaydet(SqliteConnection baglanti, string hash)
+        {
+            using var komut = baglanti.CreateCommand();
+            komut.CommandText =
+                "INSERT INTO Meta (Anahtar, Deger) VALUES ($anahtar, $deger) " +
+                "ON CONFLICT(Anahtar) DO UPDATE SET Deger = excluded.Deger;";
+            komut.Parameters.AddWithValue("$anahtar", JsonHashAnahtari);
+            komut.Parameters.AddWithValue("$deger", hash);
+            komut.ExecuteNonQuery();
         }
 
         // Parametreli sorgu: SQL injection'a karşı güvenli.

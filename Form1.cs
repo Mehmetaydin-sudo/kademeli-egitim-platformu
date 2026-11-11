@@ -17,12 +17,24 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.5.0";
+        private const string Surum = "v0.6.0";
 
-        private readonly SoruServisi _soruServisi = new();
-        private readonly IlerlemeServisi _ilerlemeServisi = new();
-        private readonly KarneServisi _karneServisi = new();
-        private readonly SimulatorServisi _simulatorServisi = new();
+        // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
+        // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
+        private SoruServisi? _soruServisi;
+        private IlerlemeServisi? _ilerlemeServisi;
+        private KarneServisi? _karneServisi;
+        private SimulatorServisi? _simulatorServisi;
+
+        private SoruServisi SoruDeposu => _soruServisi ??= new SoruServisi();
+        private IlerlemeServisi IlerlemeDeposu => _ilerlemeServisi ??= new IlerlemeServisi();
+        private KarneServisi KarneDeposu => _karneServisi ??= new KarneServisi();
+        private SimulatorServisi Simulator => _simulatorServisi ??= new SimulatorServisi();
+
+        // Ekranlar yalnızca ilk kez gösterildiğinde kurulur; her geçişte yeniden çizilmez.
+        private bool _anaMenuKirli = true;
+        private bool _sinavHazir;
+        private bool _simulatorHazir;
 
         private List<Soru> _aktifSorular = new();
         private List<SoruGorunumu> _gorunumler = new();
@@ -42,16 +54,16 @@ namespace KademeliEgitimPlatformu
         private bool _simulatorOduluAlindi = false;
 
         // Ana Yerleşim: Sol Sidebar + Sağ İçerik Alanı
-        private Panel _pnlSidebar = new();
-        private Panel _pnlIcerikAlani = new();
+        private Panel _pnlSidebar = new BufferedPanel();
+        private Panel _pnlIcerikAlani = new BufferedPanel();
         private Button _btnMenuAna = new();
         private Button _btnMenuSinav = new();
         private Button _btnMenuSimulator = new();
 
         // 3 Ana Ekran Paneli
-        private Panel _pnlAnaMenu = new();
-        private Panel _pnlSinavEkrani = new();
-        private Panel _pnlSimulatorVeKarne = new();
+        private Panel _pnlAnaMenu = new BufferedPanel();
+        private Panel _pnlSinavEkrani = new BufferedPanel();
+        private Panel _pnlSimulatorVeKarne = new BufferedPanel();
 
         // Sınav Ekranı Bileşenleri
         private Label _lblDisiplinBaslik = new();
@@ -96,7 +108,7 @@ namespace KademeliEgitimPlatformu
         {
             try
             {
-                IlerlemeDurumu durum = _ilerlemeServisi.Yukle();
+                IlerlemeDurumu durum = IlerlemeDeposu.Yukle();
                 _gorselBasari = durum.GorselBasari;
                 _veriTabaniBasari = durum.VeriTabaniBasari;
                 _siberBasari = durum.SiberBasari;
@@ -116,9 +128,12 @@ namespace KademeliEgitimPlatformu
 
         private void KaliciIlerlemeyiKaydet()
         {
+            // Başarı yüzdeleri/jeton değişti; ana menü bir sonraki gösterimde tazelenir.
+            _anaMenuKirli = true;
+
             try
             {
-                _ilerlemeServisi.Kaydet(new IlerlemeDurumu(
+                IlerlemeDeposu.Kaydet(new IlerlemeDurumu(
                     _gorselBasari,
                     _veriTabaniBasari,
                     _siberBasari,
@@ -186,8 +201,9 @@ namespace KademeliEgitimPlatformu
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
             this.Text = $"Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — {Surum} (SQLite + Roslyn)";
-            this.Size = new Size(1600, 950);
-            this.MinimumSize = new Size(1280, 800);
+            // 1366x768 gibi düşük çözünürlüklü ekranlarda da pencere ekrana sığar.
+            this.Size = new Size(1280, 800);
+            this.MinimumSize = new Size(1024, 700);
             this.WindowState = FormWindowState.Maximized;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(11, 17, 32);
@@ -197,9 +213,6 @@ namespace KademeliEgitimPlatformu
 
             _pnlIcerikAlani.Dock = DockStyle.Fill;
             _pnlIcerikAlani.BackColor = Color.FromArgb(15, 23, 42);
-
-            SinavEkraniniCiz();
-            SimulatorEkraniniCiz();
 
             _pnlIcerikAlani.Controls.Add(_pnlAnaMenu);
             _pnlIcerikAlani.Controls.Add(_pnlSinavEkrani);
@@ -281,8 +294,30 @@ namespace KademeliEgitimPlatformu
             _pnlSimulatorVeKarne.Visible = ekranKodu == "SIM";
 
             if (ekranKodu != "SINAV") _sinavTimer.Stop();
-            if (ekranKodu == "ANA") AnaMenuyuCiz();
-            if (ekranKodu == "SIM") SimulatorEkraniniCiz();
+
+            // Ana menü yalnızca ilk açılışta veya veriler değiştiğinde yeniden kurulur.
+            if (ekranKodu == "ANA" && _anaMenuKirli)
+                AnaMenuyuCiz();
+
+            // Sınav ve simülatör ekranları ilk gösterimde bir kez oluşturulur.
+            if (ekranKodu == "SINAV" && !_sinavHazir)
+            {
+                SinavEkraniniCiz();
+                _sinavHazir = true;
+            }
+
+            if (ekranKodu == "SIM")
+            {
+                if (!_simulatorHazir)
+                {
+                    SimulatorEkraniniCiz();
+                    _simulatorHazir = true;
+                }
+                else
+                {
+                    BeceriEtiketleriniGuncelle();
+                }
+            }
 
             _btnMenuAna.BackColor = ekranKodu == "ANA" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
             _btnMenuAna.ForeColor = ekranKodu == "ANA" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
@@ -296,7 +331,8 @@ namespace KademeliEgitimPlatformu
 
         private Panel CerceveliPanelOlustur(Color cerceveRengi, Color arkaPlan, int kalinlik = 1)
         {
-            Panel p = new()
+            // BufferedPanel: yeniden boyutlandırma ve ekran geçişlerinde titremeyi önler.
+            Panel p = new BufferedPanel
             {
                 Dock = DockStyle.Fill,
                 BackColor = arkaPlan
@@ -307,7 +343,6 @@ namespace KademeliEgitimPlatformu
                 using Pen kalem = new(cerceveRengi, kalinlik);
                 e.Graphics.DrawRectangle(kalem, 1, 1, p.Width - 3, p.Height - 3);
             };
-            p.Resize += (s, e) => p.Invalidate();
             return p;
         }
     }

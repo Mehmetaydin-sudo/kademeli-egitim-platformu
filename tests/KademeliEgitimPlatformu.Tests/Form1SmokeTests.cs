@@ -40,7 +40,7 @@ namespace KademeliEgitimPlatformu.Tests
             Assert.True(tamamlandi, "Form1 oluşturulması 60 saniyede tamamlanmadı (bekleyen bir ileti kutusu olabilir).");
             Assert.Null(hata);
             Assert.NotNull(baslik);
-            Assert.Contains("v0.5.0", baslik);
+            Assert.Contains("v0.6.0", baslik);
             Assert.Contains("Roslyn", baslik);
         }
 

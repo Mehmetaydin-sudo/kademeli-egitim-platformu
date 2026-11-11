@@ -28,6 +28,7 @@ Ortaöğretim ve ön lisans öğrencileri için **%100 çevrimdışı (offline)*
 * **Soru ve Şık Karıştırma:** Her sınavda soru sırası ve şıklar rastgelelenir; doğru cevap ve yanlış açıklamaları yeni sıraya birlikte taşınır (ezberleme önlenir).
 * **Klavye Kısayolları:** Sınav sırasında `1`–`4` tuşlarıyla şık seçilir, `Enter` ile sonraki soruya geçilir.
 * **Font Önbelleği:** Arayüz fontları `ConcurrentDictionary` tabanlı önbellekten alınır; ekran çizimlerinde GDI+ tutamacı sızıntısı oluşmaz.
+* **Düşük Donanım Optimizasyonu:** Ekranlar tembel oluşturulur, SQLite WAL kullanılır, değişmeyen `Sorular.json` senkronizasyonu SHA-256 özetiyle atlanır, Roslyn analizi arka planda çalışır ve paneller çift tamponludur. 1366×768 çözünürlük ve 4 GB RAM'li makineler hedeflenir.
 * **Otomatik Testler ve CI:** xUnit test paketi ve GitHub Actions iş akışı; her push'ta Release derlemesi ve testler çalışır.
 * **Dayanıklı Veri Konumu:** Uygulama klasörü yazılabilirse veriler orada (`Data/`), değilse `%LOCALAPPDATA%\KademeliEgitimPlatformu\Data` altında tutulur. Böylece Program Files kurulumlarında yönetici izni gerekmez.
 * **Soru Havuzu Senkronizasyonu:** `Data/Sorular.json` her açılışta veritabanıyla senkronize edilir; yeni sorular eklenir, aynı başlıklı sorular güncellenir.
@@ -37,8 +38,8 @@ Ortaöğretim ve ön lisans öğrencileri için **%100 çevrimdışı (offline)*
 ## 🖥️ Kurulum ve Çalıştırma
 
 ### Gereksinimler
-* Windows 10/11
-* **.NET 8 SDK** (geliştirme için) veya **.NET 8 Desktop Runtime** (yalnızca çalıştırma için)
+* Windows 10/11 (32-bit veya 64-bit)
+* **.NET 8 SDK** (geliştirme için). `Okul-x86` yayını self-contained olduğu için öğrenci bilgisayarlarında .NET kurulumu gerekmez.
 
 ### Kaynaktan çalıştırma
 ```bash
@@ -50,10 +51,21 @@ dotnet run
 Visual Studio ile açmak için `KademeliEgitimPlatformu.slnx` dosyasını kullanın (Visual Studio 2022 17.13 veya üzeri).
 
 ### Yayınlama (publish)
+
+Öğrenci ve okul bilgisayarları için **x86** profili önerilir. x86 sürümü hem 32-bit hem 64-bit Windows 10/11'de çalışır; self-contained olduğu için makinelerde .NET kurulu olması gerekmez.
+
 ```bash
-dotnet publish -c Release -r win-x64 --self-contained false
+dotnet publish KademeliEgitimPlatformu.csproj -p:PublishProfile=Okul-x86
 ```
+
+Çıktı: `bin\Release\net8.0-windows\publish\win-x86\` (ReadyToRun açık, trimming kapalı).
 `Data/Sorular.json` çıktı klasörüne otomatik kopyalanır.
+
+Yalnızca 64-bit makineler için daha küçük bir yayın istenirse:
+
+```bash
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true
+```
 
 ---
 
@@ -105,13 +117,18 @@ KademeliEgitimPlatformu/
 │   ├── PuanlamaServisi.cs    # Disiplin bazlı puanlama (saf fonksiyonlar)
 │   ├── SimulatorServisi.cs   # Roslyn tabanlı çevrimdışı kod analizi
 │   ├── FontOnbellegi.cs      # GDI+ font önbelleği
+│   ├── SqliteYardimcisi.cs   # WAL / busy_timeout ortak bağlantı ayarları
 │   └── VeriYolu.cs           # Yazılabilir veri klasörünü belirler
+├── BufferedPanel.cs          # Çift tamponlu panel (titremesiz çizim)
 ├── Form1.cs                  # Çekirdek form, sidebar, ekran geçişi, kısayollar
 ├── Form1.AnaMenu.cs          # Kontrol paneli, modül/zorluk kartları, USB paket yükleme
 ├── Form1.Sinav.cs            # Sınav akışı, şık karıştırma, puanlama
 ├── Form1.Simulator.cs        # Roslyn simülatörü ve hata karnesi
 ├── Form1.Designer.cs
 ├── Program.cs                # Giriş noktası + genel hata yakalama
+├── Properties/
+│   └── PublishProfiles/
+│       └── Okul-x86.pubxml   # Öğrenci bilgisayarları için x86 yayın profili
 ├── tests/
 │   └── KademeliEgitimPlatformu.Tests/   # xUnit testleri
 ├── .github/workflows/ci.yml  # GitHub Actions derleme + test
@@ -126,6 +143,17 @@ dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.cs
 ---
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+
+### [v0.6.0] — 2026-11-11
+* **[Performans]** Ekranlar tembel oluşturuluyor: açılışta yalnızca ana menü kurulur; sınav ve simülatör ilk açılışta hazırlanır. Menüye her dönüşte yapılan gereksiz yeniden çizim kaldırıldı.
+* **[Performans]** Ana menüdeki soru sayısı `TumSorulariGetir().Count` yerine SQLite `COUNT(*)` ile alınıyor; tüm soruların JSON'dan çözülmesi engellendi.
+* **[Performans]** `Sorular.json` dosyasının SHA-256 özeti değişmediyse senkronizasyon tamamen atlanıyor; her açılışta gereksiz JSON çözümleme ve yazma yapılmıyor.
+* **[Performans]** SQLite bağlantılarına WAL günlükleme, `busy_timeout=3000` ve `synchronous=NORMAL` ayarları eklendi (`SqliteYardimcisi`).
+* **[Performans]** Roslyn kod analizi `Task.Run` ile arka planda çalışıyor; 5 saniyeye kadar sürebilen analiz sırasında arayüz donmuyor.
+* **[Performans]** Panellerde çift tampon (`BufferedPanel`), `SuspendLayout/ResumeLayout` ve `ResizeRedraw` kullanılarak titreme ve gereksiz yeniden çizim azaltıldı.
+* **[Performans]** Minimum pencere boyutu 1024×700'e düşürüldü; 1366×768 ekranlarda görev çubuğuyla birlikte pencere ekrana sığar.
+* **[Yayın]** `Okul-x86` yayın profili eklendi: self-contained, ReadyToRun, trimming kapalı; hem 32-bit hem 64-bit Windows 10/11'de çalışır.
+* **[Geliştirildi]** `SoruServisi` yol enjeksiyonu (`jsonYolu`, `veritabaniYolu`) ve `SoruSayisi()` ile test edilebilir hale getirildi; test sayısı 43'e çıktı.
 
 ### [v0.5.0] — 2026-11-11
 * **[Eklendi]** Kod simülatörü Regex tahmininden **gerçek Roslyn derleyicisine** (`Microsoft.CodeAnalysis.CSharp`) taşındı. Hatalar satır/sütun bilgisiyle ve kararlı tanı kodlarına (CS1002, CS0029, CS0165 vb.) dayalı Türkçe ipuçlarıyla gösterilir.

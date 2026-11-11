@@ -12,6 +12,8 @@ namespace KademeliEgitimPlatformu
         // ==================== 1. ANA MENÜ ====================
         private void AnaMenuyuCiz()
         {
+            // Çok sayıda kontrol eklenirken ara yerleşim hesaplarını engeller.
+            _pnlAnaMenu.SuspendLayout();
             PanelTemizle(_pnlAnaMenu);
             _pnlAnaMenu.Dock = DockStyle.Fill;
             _pnlAnaMenu.Padding = new Padding(40, 28, 40, 28);
@@ -73,7 +75,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblAltBaslik = new()
             {
-                Text = $"Eğitim Modülleri   •   SQLite Soru Havuzu: {_soruServisi.TumSorulariGetir().Count} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
+                Text = $"Eğitim Modülleri   •   SQLite Soru Havuzu: {SoruDeposu.SoruSayisi()} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
@@ -185,6 +187,8 @@ namespace KademeliEgitimPlatformu
             anaIzgara.Controls.Add(altButonIzgara, 0, 5);
 
             _pnlAnaMenu.Controls.Add(anaIzgara);
+            _pnlAnaMenu.ResumeLayout(true);
+            _anaMenuKirli = false;
         }
 
         private Panel ModulKartiOlustur(string baslik, string aciklama, int ilerlemeYuzdesi, Color vurguRengi, DisiplinTuru disiplin)
@@ -357,13 +361,13 @@ namespace KademeliEgitimPlatformu
 
             try
             {
-                int eklenen = _soruServisi.DisaridanPaketYukle(ofd.FileName);
-                string atlananBilgi = _soruServisi.SonPaketAtlananSayisi > 0
-                    ? $"\nGeçersiz Olduğu İçin Atlanan: {_soruServisi.SonPaketAtlananSayisi}"
+                int eklenen = SoruDeposu.DisaridanPaketYukle(ofd.FileName);
+                string atlananBilgi = SoruDeposu.SonPaketAtlananSayisi > 0
+                    ? $"\nGeçersiz Olduğu İçin Atlanan: {SoruDeposu.SonPaketAtlananSayisi}"
                     : "";
 
                 MessageBox.Show(
-                    $"Paket SQLite veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {_soruServisi.TumSorulariGetir().Count}",
+                    $"Paket SQLite veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
                     "Çevrimdışı Paket Yükleme Başarılı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

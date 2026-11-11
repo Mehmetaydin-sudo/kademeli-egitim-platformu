@@ -31,8 +31,8 @@ namespace KademeliEgitimPlatformu.Services
 
         private void TabloyuHazirla()
         {
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            SqliteYardimcisi.WalEtkinlestir(baglanti);
 
             using var komut = baglanti.CreateCommand();
             komut.CommandText =
@@ -53,8 +53,7 @@ namespace KademeliEgitimPlatformu.Services
         {
             ArgumentNullException.ThrowIfNull(kayitlar);
 
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var islem = baglanti.BeginTransaction();
 
             using (var komut = baglanti.CreateCommand())
@@ -105,8 +104,7 @@ namespace KademeliEgitimPlatformu.Services
             int sinir = Math.Clamp(adet, 1, MaksKayitSayisi);
             var sonuc = new List<YanlisKaydi>();
 
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
 
             using var komut = baglanti.CreateCommand();
             komut.CommandText =
@@ -138,8 +136,7 @@ namespace KademeliEgitimPlatformu.Services
         /// <summary>Tüm yanlış cevap kayıtlarını siler.</summary>
         public void Temizle()
         {
-            using var baglanti = new SqliteConnection(_baglantiMetni);
-            baglanti.Open();
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             using var komut = baglanti.CreateCommand();
             komut.CommandText = "DELETE FROM YanlisCevaplar;";
             komut.ExecuteNonQuery();

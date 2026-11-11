@@ -433,3 +433,6 @@ Data/*.db-shm
 Data/*.db-wal
 Data/*.log
 
+
+# Okul bilgisayarlari icin x86 yayin profili repoda tutulur.
+!Properties/PublishProfiles/Okul-x86.pubxml
