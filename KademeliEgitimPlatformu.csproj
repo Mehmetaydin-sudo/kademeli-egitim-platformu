@@ -6,21 +6,29 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <AssemblyName>KademeliEgitimPlatformu</AssemblyName>
     <RootNamespace>KademeliEgitimPlatformu</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Test projesi ayrı derlenir; ana uygulamaya dahil edilmez. -->
+    <!-- Test ve geliştirici araçları ayrı derlenir; ana uygulamaya dahil edilmez. -->
     <Compile Remove="tests\**" />
     <None Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
+    <Compile Remove="tools\**" />
+    <None Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Data\Sorular.json">
+    <!-- Öğrenci bilgisayarlarına düz metin soru dosyası kopyalanmaz.
+         Yayın çıktısında yalnızca AES-256-GCM ile şifrelenmiş Sorular.dat bulunur. -->
+    <None Update="Data\Sorular.dat">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Data\Sorular.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 

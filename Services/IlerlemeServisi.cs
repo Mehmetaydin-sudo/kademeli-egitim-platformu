@@ -15,13 +15,17 @@ namespace KademeliEgitimPlatformu.Services
         int VeriTabaniBasari = 0,
         int SiberBasari = 0,
         int IpucuJetonu = 3,
-        bool HataAvcisiKazanildi = false);
+        bool HataAvcisiKazanildi = false,
+        bool GorselAraSinavGecti = false,
+        bool VeriTabaniAraSinavGecti = false,
+        bool SiberAraSinavGecti = false,
+        bool OrtaModGecti = false);
 
     /// <summary>
     /// İlerleme verisini yerel SQLite dosyasında (Data/ilerleme.db) saklar.
     /// Tablo: Ilerleme(Anahtar TEXT PRIMARY KEY, Deger INTEGER)
     /// </summary>
-    public class IlerlemeServisi
+    public class IlerlemeServisi : IIlerlemeDeposu
     {
         private readonly string _baglantiMetni;
 
@@ -66,7 +70,11 @@ namespace KademeliEgitimPlatformu.Services
                 Math.Clamp(degerler.GetValueOrDefault("veritabani", v.VeriTabaniBasari), 0, 100),
                 Math.Clamp(degerler.GetValueOrDefault("siber", v.SiberBasari), 0, 100),
                 Math.Max(0, degerler.GetValueOrDefault("jeton", v.IpucuJetonu)),
-                degerler.GetValueOrDefault("hataAvcisi", 0) == 1);
+                degerler.GetValueOrDefault("hataAvcisi", 0) == 1,
+                degerler.GetValueOrDefault("araSinavGorsel", 0) == 1,
+                degerler.GetValueOrDefault("araSinavVeri", 0) == 1,
+                degerler.GetValueOrDefault("araSinavSiber", 0) == 1,
+                degerler.GetValueOrDefault("ortaMod", 0) == 1);
         }
 
         /// <summary>İlerlemeyi tek bir transaction içinde kaydeder (ya hepsi yazılır ya hiçbiri).</summary>
@@ -80,6 +88,10 @@ namespace KademeliEgitimPlatformu.Services
             Yaz(baglanti, islem, "siber", d.SiberBasari);
             Yaz(baglanti, islem, "jeton", d.IpucuJetonu);
             Yaz(baglanti, islem, "hataAvcisi", d.HataAvcisiKazanildi ? 1 : 0);
+            Yaz(baglanti, islem, "araSinavGorsel", d.GorselAraSinavGecti ? 1 : 0);
+            Yaz(baglanti, islem, "araSinavVeri", d.VeriTabaniAraSinavGecti ? 1 : 0);
+            Yaz(baglanti, islem, "araSinavSiber", d.SiberAraSinavGecti ? 1 : 0);
+            Yaz(baglanti, islem, "ortaMod", d.OrtaModGecti ? 1 : 0);
 
             islem.Commit();
         }

@@ -45,15 +45,300 @@
     "KodBlogu": "// Kullanıcı Kaydı: Şifre kaydetme işlemi\nstring sifre = txtSifre.Text;\n// Veri tabanına nasıl kaydedilmeli?",
     "Secenekler": [
       "Şifre doğrudan düz metin (plain text) olarak kaydedilmelidir.",
-      "Geri döndürülemez bir özetleme (SHA-256 / Hash) algoritmasından geçirilerek kaydedilmelidir.",
-      "Şifre sadece büyük harfe çevrilip kaydedilmelidir.",
+      "Şifre tek başına SHA-256 ile özetlenip kaydedilmelidir.",
+      "Şifre, her kullanıcı için rastgele bir tuz (salt) ile birlikte PBKDF2/bcrypt/Argon2 gibi yavaş bir özetleme algoritmasından geçirilerek kaydedilmelidir.",
       "Şifre Base64 ile kodlanıp düz metin gibi saklanmalıdır."
+    ],
+    "DogruSecenekIndex": 2,
+    "YanlisCevapAciklamalari": {
+      "0": "Düz metin saklanan şifreler, veri tabanı dosyası çalındığında anında ifşa olur.",
+      "1": "SHA-256 hızlı bir hash'tir ve tuz kullanılmazsa aynı şifreler aynı özeti üretir; rainbow table ve kaba kuvvet saldırılarına karşı zayıftır. Tek başına yeterli değildir.",
+      "3": "Base64 bir şifreleme değil, sadece format dönüştürmedir; herkes tek tıkla orijinal şifreyi çözebilir."
+    }
+  },
+  {
+    "Id": 4,
+    "Disiplin": 0,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "WinForms'ta bir panele çok sayıda kontrol eklerken `SuspendLayout()` ve `ResumeLayout()` kullanmanın temel amacı nedir?",
+    "Secenekler": [
+      "Kontrollerin görünürlüğünü tamamen kapatmak.",
+      "Yerleşim hesaplamalarını geçici olarak askıya alarak ekranın titremesini ve gereksiz yeniden çizimi azaltmak.",
+      "Olay (event) işleyicilerinin çalışmasını kalıcı olarak engellemek.",
+      "Veritabanı bağlantısını kapatmak."
     ],
     "DogruSecenekIndex": 1,
     "YanlisCevapAciklamalari": {
-      "0": "Düz metin saklanan şifreler, veri tabanı dosyası çalındığında anında ifşa olur.",
-      "2": "Büyük harfe çevirmek şifreleme değildir, herkes tarafından okunabilir.",
-      "3": "Base64 bir şifreleme değil, sadece format dönüştürmedir; herkes tek tıkla orijinal şifreyi çözebilir."
+      "0": "SuspendLayout görünürlüğü değiştirmez; yalnızca yerleşim hesaplamalarını erteler.",
+      "2": "Olay işleyicileri engellenmez; yalnızca yerleşim (layout) işlemleri ertelenir.",
+      "3": "Bu metotların veritabanı bağlantısıyla ilgisi yoktur."
+    }
+  },
+  {
+    "Id": 5,
+    "Disiplin": 0,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "C# dilinde `using` deyimi hangi tür nesneler için kullanılır?",
+    "Secenekler": [
+      "Yalnızca int ve string gibi değer türleri için.",
+      "IDisposable arayüzünü uygulayan ve serbest bırakılması gereken kaynaklar için.",
+      "Sadece Windows Forms kontrolleri için.",
+      "Yalnızca statik sınıflar için."
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "Değer türleri için using gerekmez; using kaynak yönetimi içindir.",
+      "2": "WinForms kontrolleri de IDisposable olabilir; ancak using yalnızca onlara özel değildir.",
+      "3": "Statik sınıflar IDisposable uygulamaz; using onlar için kullanılmaz."
+    }
+  },
+  {
+    "Id": 6,
+    "Disiplin": 0,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Bir WinForms olay işleyicisinin (event handler) standart imzası aşağıdakilerden hangisidir?",
+    "Secenekler": [
+      "void Metot()",
+      "void Metot(object sender, EventArgs e)",
+      "int Metot(string metin)",
+      "Task Metot(int sayi)"
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "Parametresiz metot standart olay imzası değildir; olay kaynağı ve verisi aktarılamaz.",
+      "2": "Olay işleyicisi string döndürmez; olaylar genellikle void döner.",
+      "3": "Task döndüren metotlar async olabilir; ancak standart EventHandler imzası bu değildir."
+    }
+  },
+  {
+    "Id": 7,
+    "Disiplin": 0,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Uzun süren bir veritabanı sorgusunu arayüz iş parçacığında doğrudan çalıştırmak neden sakıncalıdır?",
+    "Secenekler": [
+      "Sorgu sonucu yanlış döner.",
+      "Arayüz iş parçacığı meşgul olduğu için pencere donar ve kullanıcıya yanıt vermez.",
+      "SQLite sorguları yalnızca arka planda çalışabilir.",
+      "Veritabanı dosyası otomatik olarak silinir."
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "Sorgu sonucu bu nedenle yanlış olmaz; sorun arayüzün yanıt vermemesidir.",
+      "2": "SQLite sorguları ana iş parçacığında da çalışabilir; ancak uzun sorgular arayüzü kilitler.",
+      "3": "Veritabanı dosyası bu nedenle silinmez."
+    }
+  },
+  {
+    "Id": 8,
+    "Disiplin": 0,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Çift tamponlama (double buffering) hangi sorunu azaltmak için kullanılır?",
+    "Secenekler": [
+      "Veritabanı kilitlenmelerini",
+      "Ekranın titremesini (flicker) ve yeniden çizim sırasındaki görsel bozulmaları",
+      "İnternet bağlantısı kopmalarını",
+      "Şifreleme anahtarının kaybolmasını"
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "Çift tamponlama veritabanı kilitlemesiyle ilgili değildir.",
+      "2": "İnternet bağlantısıyla ilgisi yoktur; uygulama çevrimdışı çalışır.",
+      "3": "Şifreleme anahtarı yönetimi tamamen farklı bir konudur."
+    }
+  },
+  {
+    "Id": 9,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "İlişkisel bir veri tabanında PRIMARY KEY (birincil anahtar) neyi garanti eder?",
+    "Secenekler": [
+      "Sütundaki değerlerin benzersiz olmasını ve NULL olamamasını",
+      "Tablodaki tüm sütunların otomatik şifrelenmesini",
+      "Sorguların her zaman indekssiz çalışmasını",
+      "Tablodaki kayıt sayısının sınırsız olmasını"
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "PRIMARY KEY şifreleme yapmaz; yalnızca benzersizlik ve NULL olmama kuralı getirir.",
+      "2": "PRIMARY KEY genellikle bir indeks oluşturur; sorguların indekssiz çalışmasını sağlamaz.",
+      "3": "Kayıt sayısı sınırıyla doğrudan ilgisi yoktur."
+    }
+  },
+  {
+    "Id": 10,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "FOREIGN KEY (yabancı anahtar) hangi veri bütünlüğü kuralını uygular?",
+    "Secenekler": [
+      "Bir tablodaki kaydın, başka bir tabloda var olan bir kayda bağlı olmasını",
+      "Tüm metin alanlarının büyük harfe çevrilmesini",
+      "Veritabanının her açılışta silinmesini",
+      "Sorguların yalnızca tek tabloda çalışmasını"
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "FOREIGN KEY harf dönüşümü yapmaz.",
+      "2": "Veritabanının silinmesine yol açmaz; ilişkisel bütünlük sağlar.",
+      "3": "Aksine, tablolar arasında ilişki kurulmasını sağlar."
+    }
+  },
+  {
+    "Id": 11,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "SQL'de `SELECT COUNT(*) FROM Ogrenciler;` sorgusu ne döndürür?",
+    "Secenekler": [
+      "Ogrenciler tablosundaki toplam kayıt sayısını",
+      "Ogrenciler tablosunun tüm sütun adlarını",
+      "Yalnızca ilk öğrencinin adını",
+      "Tablodaki benzersiz sütun sayısını"
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "Sütun adları için PRAGMA table_info veya şema sorguları kullanılır.",
+      "2": "İlk kaydı getirmek için SELECT ... LIMIT 1 gerekir.",
+      "3": "COUNT(*) sütun sayısını değil, satır sayısını sayar."
+    }
+  },
+  {
+    "Id": 12,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Bir SQLite işleminde (transaction) `COMMIT` ve `ROLLBACK` arasındaki fark nedir?",
+    "Secenekler": [
+      "COMMIT değişiklikleri kalıcı yazar; ROLLBACK işlem başladıktan sonraki değişiklikleri geri alır.",
+      "COMMIT yalnızca tablo siler; ROLLBACK yeni tablo oluşturur.",
+      "İkisi de aynı işi yapar; yalnızca isimleri farklıdır.",
+      "COMMIT yalnızca okuma yapar; ROLLBACK yazma yapar."
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "COMMIT tablo silmez; işlemi onaylar.",
+      "2": "Aynı işi yapmazlar; biri onaylar, diğeri geri alır.",
+      "3": "COMMIT yazma işlemini kalıcılaştırır; ROLLBACK onu iptal eder."
+    }
+  },
+  {
+    "Id": 13,
+    "Disiplin": 1,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Veri tabanında indeks (index) kullanmanın temel etkisi nedir?",
+    "Secenekler": [
+      "Okuma/sorgu hızını artırır, ancak ekleme-güncelleme işlemlerinde ek maliyet getirir.",
+      "Tüm verileri otomatik olarak şifreler.",
+      "Tablodaki yinelenen kayıtları siler.",
+      "Veritabanı dosyasını küçültür."
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "İndeks şifreleme yapmaz.",
+      "2": "İndeks yinelenen kayıtları silmez; UNIQUE kısıtı bunu engeller.",
+      "3": "İndeks ek disk alanı kullanır; dosyayı küçültmez."
+    }
+  },
+  {
+    "Id": 14,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "SHA-256'nın şifre saklamada tek başına yetersiz kalmasının temel nedeni nedir?",
+    "Secenekler": [
+      "SHA-256 çok yavaş olduğu için veritabanını kilitler.",
+      "SHA-256 hızlı ve tuzsuz kullanıldığında aynı şifreler aynı özeti üretir; rainbow table ve kaba kuvvet saldırıları kolaylaşır.",
+      "SHA-256 geri döndürülemez olduğu için şifre hiç doğrulanamaz.",
+      "SHA-256 yalnızca resim dosyalarında çalışır."
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "SHA-256 hızlıdır; sorun yavaşlık değil, tuzsuz ve hızlı olmasıdır.",
+      "2": "Geri döndürülemez olması doğrulamayı engellemez; özet karşılaştırılarak doğrulama yapılır.",
+      "3": "SHA-256 her türlü bayt dizisi üzerinde çalışır."
+    }
+  },
+  {
+    "Id": 15,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Hash (özetleme) ile şifreleme (encryption) arasındaki temel fark nedir?",
+    "Secenekler": [
+      "Hash tek yönlüdür ve geri döndürülemez; şifreleme anahtarla geri döndürülebilir.",
+      "Hash yalnızca metinlerde, şifreleme yalnızca sayılarda kullanılır.",
+      "İkisi de aynıdır; sadece farklı isimlerdir.",
+      "Şifreleme her zaman anahtarsızdır."
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "Her ikisi de metin ve bayt dizileri üzerinde çalışabilir.",
+      "2": "Aynı değildir; hash geri döndürülemez, şifreleme anahtarla çözülebilir.",
+      "3": "Şifreleme anahtar kullanır; anahtarsız şifreleme güvenli değildir."
+    }
+  },
+  {
+    "Id": 16,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "AES-256-GCM algoritması hangi güvenlik özelliklerini birlikte sağlar?",
+    "Secenekler": [
+      "Yalnızca sıkıştırma",
+      "Gizlilik (şifreleme) ve bütünlük/doğrulama (authentication tag)",
+      "Yalnızca hash üretimi",
+      "Yalnızca Base64 kodlama"
+    ],
+    "DogruSecenekIndex": 1,
+    "YanlisCevapAciklamalari": {
+      "0": "AES-GCM sıkıştırma algoritması değildir.",
+      "2": "AES-GCM bir şifreleme modudur; tek başına hash algoritması değildir.",
+      "3": "Base64 bir kodlama biçimidir; şifreleme sağlamaz."
+    }
+  },
+  {
+    "Id": 17,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "HMAC (Hash-based Message Authentication Code) ne için kullanılır?",
+    "Secenekler": [
+      "Mesajın değiştirilmediğini ve gizli anahtarı bilen bir taraftan geldiğini doğrulamak için",
+      "Şifreyi düz metne çevirmek için",
+      "Veritabanı tablosunu silmek için",
+      "Görüntü dosyalarını sıkıştırmak için"
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "HMAC geri döndürülemez; şifre çözmez.",
+      "2": "HMAC veritabanı işlemi değildir.",
+      "3": "HMAC sıkıştırma algoritması değildir."
+    }
+  },
+  {
+    "Id": 18,
+    "Disiplin": 2,
+    "Zorluk": 0,
+    "Etiket": "AraSinav",
+    "Baslik": "Şifre saklarken kullanılan tuz (salt) değeri ne işe yarar?",
+    "Secenekler": [
+      "Aynı şifreye sahip kullanıcıların farklı özetler üretmesini sağlar ve rainbow table saldırılarını zorlaştırır.",
+      "Şifreyi kısaltarak daha hızlı doğrulama yapar.",
+      "Şifreyi herkese açık biçimde paylaşır.",
+      "Veritabanı bağlantısını hızlandırır."
+    ],
+    "DogruSecenekIndex": 0,
+    "YanlisCevapAciklamalari": {
+      "1": "Tuz şifreyi kısaltmaz; özete eklenen rastgele bir değerdir.",
+      "2": "Tuz gizli değildir ama şifreyi paylaşmaz; yalnızca özeti benzersizleştirir.",
+      "3": "Tuzun veritabanı bağlantı hızıyla ilgisi yoktur."
     }
   }
 ]

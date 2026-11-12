@@ -93,9 +93,9 @@ namespace KademeliEgitimPlatformu
             modullerIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             modullerIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
-            modullerIzgara.Controls.Add(ModulKartiOlustur("</>  Görsel Programlama", "Bileşen tanımları, form kontrolleri, olay (event) yönetimi ve asenkron iş parçacığı mimarisi.", _gorselBasari, Color.FromArgb(20, 184, 166), DisiplinTuru.GorselProgramlama), 0, 0);
-            modullerIzgara.Controls.Add(ModulKartiOlustur("🗄️  Veri Tabanları", "Yerel SQLite mimarisi, tablo yapıları, ilişkisel sorgu tasarımı ve veri bütünlüğü.", _veriTabaniBasari, Color.FromArgb(245, 158, 11), DisiplinTuru.VeriTabanlari), 1, 0);
-            modullerIzgara.Controls.Add(ModulKartiOlustur("🛡️  Siber Güvenlik", "Güvenli kodlama ilkeleri, SHA-256 özetleme (hash), saldırı senaryoları ve zafiyet analizi.", _siberBasari, Color.FromArgb(236, 72, 153), DisiplinTuru.SiberGuvenlik), 2, 0);
+            modullerIzgara.Controls.Add(ModulKartiOlustur("</>  Görsel Programlama", "Bileşen tanımları, form kontrolleri, olay (event) yönetimi ve asenkron iş parçacığı mimarisi.", _gorselBasari, _gorselAraSinavGecti, Color.FromArgb(20, 184, 166), DisiplinTuru.GorselProgramlama), 0, 0);
+            modullerIzgara.Controls.Add(ModulKartiOlustur("🗄️  Veri Tabanları", "Yerel SQLite mimarisi, tablo yapıları, ilişkisel sorgu tasarımı ve veri bütünlüğü.", _veriTabaniBasari, _veriTabaniAraSinavGecti, Color.FromArgb(245, 158, 11), DisiplinTuru.VeriTabanlari), 1, 0);
+            modullerIzgara.Controls.Add(ModulKartiOlustur("🛡️  Siber Güvenlik", "Güvenli kodlama ilkeleri, SHA-256 özetleme (hash), AES şifreleme, saldırı senaryoları ve zafiyet analizi.", _siberBasari, _siberAraSinavGecti, Color.FromArgb(236, 72, 153), DisiplinTuru.SiberGuvenlik), 2, 0);
 
             Label lblZorlukBaslik = new()
             {
@@ -117,7 +117,11 @@ namespace KademeliEgitimPlatformu
             zorlukIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
             zorlukIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
-            bool ortaAcik = EnYuksekBasari() >= 75;
+            IlerlemeDurumu durum = MevcutIlerleme();
+            bool ortaAcik = KademeServisi.OrtaModAcikMi(durum);
+            bool zorAcik = KademeServisi.ZorModAcikMi(durum);
+            int gecilenAraSinav = KademeServisi.GecilenAraSinavSayisi(durum);
+
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
                 "Kolay Mod (Açık)",
                 "✓ Her Zaman Açık",
@@ -127,17 +131,21 @@ namespace KademeliEgitimPlatformu
 
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
                 "Orta Mod (%75 Başarı Barajı)",
-                ortaAcik ? "✓ Kilidi Açık" : "🔒 %75 Baraj",
-                "Giriş için en az bir modülde %75 başarı gereklidir.",
+                ortaAcik ? "✓ Kilidi Açık" : $"🔒 Ara Sınav {gecilenAraSinav}/3",
+                ortaAcik
+                    ? "Üç ara sınav tamamlandı. Orta Mod karma sınavına girebilirsiniz."
+                    : "Giriş için üç modülün ara sınavını da geçmeniz gerekir.",
                 Color.FromArgb(245, 158, 11),
                 OrtaModuAc), 1, 0);
 
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
                 "Zor Mod (Simülatör)",
-                _simulatorOduluAlindi ? "✓ Tamamlandı" : "🛠️ Canlı Analiz",
-                "Gizli syntax tuzakları, gerçek Roslyn derleyicisiyle denetlenir.",
+                zorAcik ? "✓ Kilidi Açık" : "🔒 Orta Mod Gerekli",
+                zorAcik
+                    ? "Gizli syntax tuzakları, gerçek Roslyn derleyicisiyle denetlenir."
+                    : "Önce Orta Mod karma sınavını %75 ile geçin.",
                 Color.FromArgb(139, 92, 246),
-                () => EkranDegistir("SIM")), 2, 0);
+                ZorModuAc), 2, 0);
 
             TableLayoutPanel altButonIzgara = new()
             {
@@ -174,7 +182,7 @@ namespace KademeliEgitimPlatformu
                 Cursor = Cursors.Hand
             };
             btnSimulatorAc.FlatAppearance.BorderSize = 0;
-            btnSimulatorAc.Click += (s, e) => EkranDegistir("SIM");
+            btnSimulatorAc.Click += (s, e) => SimulatoruAc();
 
             altButonIzgara.Controls.Add(btnTumunuCoz, 0, 0);
             altButonIzgara.Controls.Add(btnSimulatorAc, 1, 0);
@@ -191,7 +199,7 @@ namespace KademeliEgitimPlatformu
             _anaMenuKirli = false;
         }
 
-        private Panel ModulKartiOlustur(string baslik, string aciklama, int ilerlemeYuzdesi, Color vurguRengi, DisiplinTuru disiplin)
+        private Panel ModulKartiOlustur(string baslik, string aciklama, int ilerlemeYuzdesi, bool araSinavGecti, Color vurguRengi, DisiplinTuru disiplin)
         {
             Panel kart = CerceveliPanelOlustur(vurguRengi, Color.FromArgb(22, 32, 50), 2);
             kart.Margin = new Padding(10);
@@ -228,10 +236,11 @@ namespace KademeliEgitimPlatformu
 
             Label lblGelisim = new()
             {
-                Text = $"Gelişim: %{ilerlemeYuzdesi}",
-                Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
-                ForeColor = vurguRengi,
-                Dock = DockStyle.Fill
+                Text = $"Gelişim: %{ilerlemeYuzdesi}   •   Ara Sınav: {(araSinavGecti ? "✓ Geçildi" : "Bekliyor")}",
+                Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold),
+                ForeColor = araSinavGecti ? Color.FromArgb(74, 222, 128) : vurguRengi,
+                Dock = DockStyle.Fill,
+                AutoEllipsis = true
             };
 
             Panel pnlOzelBar = new()
@@ -250,11 +259,12 @@ namespace KademeliEgitimPlatformu
             Button btnBasla = new()
             {
                 Text = ilerlemeYuzdesi > 20 ? "Devam Et →" : "Başla →",
-                Font = FontOnbellegi.Al("Segoe UI", 10.5f, FontStyle.Bold),
+                Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
                 Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 4, 0),
                 Cursor = Cursors.Hand
             };
             btnBasla.FlatAppearance.BorderColor = vurguRengi;
@@ -262,11 +272,37 @@ namespace KademeliEgitimPlatformu
             btnBasla.FlatAppearance.MouseOverBackColor = vurguRengi;
             btnBasla.Click += (s, e) => SinaviBaslat(disiplin, null, $"{baslik} — Kademeli Eğitim Modülü");
 
+            Button btnAraSinav = new()
+            {
+                Text = araSinavGecti ? "✓ Ara Sınav" : "📝 Ara Sınav",
+                Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
+                BackColor = araSinavGecti ? Color.FromArgb(20, 65, 40) : Color.FromArgb(37, 99, 235),
+                ForeColor = araSinavGecti ? Color.FromArgb(134, 239, 172) : Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Dock = DockStyle.Fill,
+                Margin = new Padding(4, 0, 0, 0),
+                Cursor = Cursors.Hand
+            };
+            btnAraSinav.FlatAppearance.BorderSize = 0;
+            btnAraSinav.Click += (s, e) => AraSinaviBaslat(disiplin);
+
+            TableLayoutPanel butonIzgara = new()
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 1,
+                Margin = new Padding(0)
+            };
+            butonIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            butonIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            butonIzgara.Controls.Add(btnBasla, 0, 0);
+            butonIzgara.Controls.Add(btnAraSinav, 1, 0);
+
             icIzgara.Controls.Add(lblAd, 0, 0);
             icIzgara.Controls.Add(lblAciklama, 0, 1);
             icIzgara.Controls.Add(lblGelisim, 0, 2);
             icIzgara.Controls.Add(pnlOzelBar, 0, 3);
-            icIzgara.Controls.Add(btnBasla, 0, 4);
+            icIzgara.Controls.Add(butonIzgara, 0, 4);
 
             kart.Controls.Add(icIzgara);
             return kart;
@@ -325,20 +361,17 @@ namespace KademeliEgitimPlatformu
             return p;
         }
 
-        /// <summary>Üç modül içindeki en yüksek başarı yüzdesi.</summary>
-        private int EnYuksekBasari() =>
-            Math.Max(_gorselBasari, Math.Max(_veriTabaniBasari, _siberBasari));
-
-        /// <summary>Orta Mod, en az bir modülde %75 başarı gerektirir (README'deki baraj).</summary>
+        /// <summary>Orta Mod, üç modülün ara sınavı da geçilince açılır.</summary>
         private void OrtaModuAc()
         {
-            int enYuksek = EnYuksekBasari();
-            if (enYuksek < 75)
+            IlerlemeDurumu durum = MevcutIlerleme();
+            if (!KademeServisi.OrtaModAcikMi(durum))
             {
                 MessageBox.Show(
                     "Orta Mod henüz kilitli.\n\n" +
-                    "Giriş için en az bir modülde %75 başarı gerekiyor.\n" +
-                    $"Mevcut en yüksek başarınız: %{enYuksek}",
+                    $"Ara sınav barajı: %{KademeServisi.AraSinavBaraji}\n" +
+                    $"Tamamlanan: {KademeServisi.GecilenAraSinavSayisi(durum)}/3\n\n" +
+                    KademeServisi.EksikAraSinavMetni(durum),
                     "Kilitli Mod",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -348,12 +381,30 @@ namespace KademeliEgitimPlatformu
             SinaviBaslat(null, ZorlukSeviyesi.Orta, "Orta Mod — Karma Değerlendirme");
         }
 
+        /// <summary>Zor Mod, Orta Mod sınavı geçildikten sonra açılır.</summary>
+        private void ZorModuAc()
+        {
+            IlerlemeDurumu durum = MevcutIlerleme();
+            if (!KademeServisi.ZorModAcikMi(durum))
+            {
+                string mesaj = !KademeServisi.OrtaModAcikMi(durum)
+                    ? "Zor Mod henüz kilitli.\n\nÖnce üç modülün ara sınavını geçin:\n" +
+                      KademeServisi.EksikAraSinavMetni(durum)
+                    : "Zor Mod henüz kilitli.\n\nOrta Mod karma sınavını en az %75 başarıyla geçmeniz gerekiyor.";
+
+                MessageBox.Show(mesaj, "Kilitli Mod", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            EkranDegistir("SIM");
+        }
+
         private void UsbPaketYukle_Click(object? sender, EventArgs e)
         {
             using OpenFileDialog ofd = new()
             {
-                Title = "Çevrimdışı Soru Paketi Seçin (.json)",
-                Filter = "JSON Soru Paketi (*.json)|*.json"
+                Title = "Çevrimdışı Soru Paketi Seçin (.json veya .dat)",
+                Filter = "Soru Paketi (*.json;*.dat)|*.json;*.dat|JSON Soru Paketi (*.json)|*.json|Şifreli Paket (*.dat)|*.dat"
             };
 
             if (ofd.ShowDialog() != DialogResult.OK)

@@ -25,6 +25,13 @@ namespace KademeliEgitimPlatformu.Models
         public int Id { get; set; }
         public DisiplinTuru Disiplin { get; set; }
         public ZorlukSeviyesi Zorluk { get; set; }
+
+        /// <summary>
+        /// İsteğe bağlı etiket. "AraSinav" olan sorular modül ara sınavlarında kullanılır;
+        /// boş bırakılan sorular normal modül/karma sınav havuzuna girer.
+        /// </summary>
+        public string? Etiket { get; set; }
+
         public string Baslik { get; set; } = string.Empty;
         public string? KodBlogu { get; set; }
         public List<string> Secenekler { get; set; } = new();

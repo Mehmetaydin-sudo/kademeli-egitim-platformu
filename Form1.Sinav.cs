@@ -253,9 +253,50 @@ namespace KademeliEgitimPlatformu
 
         private void SinaviBaslat(DisiplinTuru? disiplin, ZorlukSeviyesi? zorluk, string baslik)
         {
-            _aktifSorular = disiplin.HasValue
+            _aktifSinavTuru = SinavTuru.Normal;
+            _aktifSinavDisiplini = disiplin;
+            _aktifZorluk = zorluk;
+
+            List<Soru> sorular = disiplin.HasValue
                 ? SoruDeposu.SorulariFiltrele(disiplin.Value, zorluk)
                 : SoruDeposu.TumSorulariGetir(zorluk);
+
+            SinaviBaslatInternal(sorular, baslik, disiplin, zorluk);
+        }
+
+        /// <summary>
+        /// Modül ara sınavını başlatır. Sorular "AraSinav" etiketli havuzdan gelir;
+        /// geçme barajı %70'tir ve sonuç kalıcı olarak ilerlemeye yazılır.
+        /// </summary>
+        private void AraSinaviBaslat(DisiplinTuru disiplin)
+        {
+            List<Soru> sorular = SoruDeposu.AraSinavSorulariniGetir(disiplin);
+
+            if (sorular.Count == 0)
+            {
+                MessageBox.Show(
+                    "Bu modül için henüz ara sınav sorusu bulunamadı.\n\n" +
+                    "Soru havuzunu Data/Sorular.json içinde genişletebilir veya USB paket yükleyebilirsiniz.",
+                    "Ara Sınav Bulunamadı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            _aktifSinavTuru = SinavTuru.AraSinav;
+            _aktifSinavDisiplini = disiplin;
+            _aktifZorluk = null;
+
+            SinaviBaslatInternal(sorular, $"{disiplin} — Ara Sınav", disiplin, null);
+        }
+
+        private void SinaviBaslatInternal(
+            List<Soru> sorular,
+            string baslik,
+            DisiplinTuru? disiplin,
+            ZorlukSeviyesi? zorluk)
+        {
+            _aktifSorular = sorular;
 
             if (_aktifSorular.Count == 0)
             {
@@ -464,37 +505,67 @@ namespace KademeliEgitimPlatformu
             int toplam = _aktifSorular.Count;
             int dogru = _cevaplar.Count(c => c);
             int basariYuzdesi = PuanlamaServisi.Yuzde(dogru, toplam);
-            bool barajGecti = basariYuzdesi >= 75;
+            TimeSpan sure = TimeSpan.FromSeconds(Math.Max(0, _gecenSaniye));
+
+            // Yanlış cevapları hata karnesi için kalıcı kaydet (rapor hatası sınavı engellemez).
+            YanlislariKarneyeKaydet();
+
+            if (_aktifSinavTuru == SinavTuru.AraSinav)
+            {
+                bool araSinavGecti = KademeServisi.AraSinavGectiMi(dogru, toplam);
+                if (araSinavGecti)
+                    AraSinaviGectiOlarakIsaretle(_aktifSinavDisiplini);
+
+                KaliciIlerlemeyiKaydet();
+
+                IlerlemeDurumu durum = MevcutIlerleme();
+                int gecilen = KademeServisi.GecilenAraSinavSayisi(durum);
+
+                string sonucMesaji = araSinavGecti
+                    ? $"🎉 Ara sınavı geçtiniz! ({gecilen}/3 tamamlandı)\n" +
+                      (KademeServisi.OrtaModAcikMi(durum)
+                          ? "Orta Mod kilidi açıldı."
+                          : KademeServisi.EksikAraSinavMetni(durum))
+                    : $"⚠️ Ara sınav barajı %{KademeServisi.AraSinavBaraji}. Tekrar deneyebilirsiniz.\n" +
+                      KademeServisi.EksikAraSinavMetni(durum);
+
+                MessageBox.Show(
+                    $"Ara Sınav Tamamlandı!\n\n" +
+                    $"Doğru Sayısı: {dogru} / {toplam}\n" +
+                    $"Geçen Süre: {sure:mm\\:ss}\n" +
+                    $"Başarı Yüzdesi: %{basariYuzdesi}\n\n{sonucMesaji}",
+                    "Ara Sınav Sonucu",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                EkranDegistir("ANA");
+                return;
+            }
+
+            bool barajGecti = basariYuzdesi >= KademeServisi.OrtaModBaraji;
 
             var sonuclar = PuanlamaServisi.DisiplinBazindaHesapla(_aktifSorular, _cevaplar);
-            var mevcutDurum = new IlerlemeDurumu(
-                _gorselBasari, _veriTabaniBasari, _siberBasari, _ipucuJetonu, _simulatorOduluAlindi);
-            var guncelDurum = PuanlamaServisi.Birlestir(mevcutDurum, sonuclar, barajGecti ? 1 : 0);
+            IlerlemeDurumu mevcutDurum = MevcutIlerleme();
+            IlerlemeDurumu guncelDurum = PuanlamaServisi.Birlestir(mevcutDurum, sonuclar, barajGecti ? 1 : 0);
 
             _gorselBasari = guncelDurum.GorselBasari;
             _veriTabaniBasari = guncelDurum.VeriTabaniBasari;
             _siberBasari = guncelDurum.SiberBasari;
             _ipucuJetonu = guncelDurum.IpucuJetonu;
 
-            // Yanlış cevapları hata karnesi için kalıcı kaydet (rapor hatası sınavı engellemez).
-            if (_oturumYanlislari.Count > 0)
-            {
-                try
-                {
-                    KarneDeposu.Kaydet(_oturumYanlislari);
-                }
-                catch (Exception)
-                {
-                    // Karne yazılamasa bile ilerleme ve sınav sonucu korunur.
-                }
-            }
+            // Orta Mod sınavı %75 ile geçilirse Zor Mod kilidi açılır.
+            if (_aktifZorluk == ZorlukSeviyesi.Orta && barajGecti)
+                _ortaModGecti = true;
 
             KaliciIlerlemeyiKaydet();
 
-            TimeSpan sure = TimeSpan.FromSeconds(Math.Max(0, _gecenSaniye));
-            string barajMesaji = barajGecti
-                ? "🎉 TEBRİKLER! %75 Başarı Barajını geçtiniz, Orta Mod kilidi açıldı ve +1 İpucu Jetonu kaydedildi!"
-                : "⚠️ %75 Başarı Barajının altında kaldınız. Orta moda geçmek için yanlış açıklamalarını tekrar gözden geçirin.";
+            string barajMesaji = _aktifZorluk == ZorlukSeviyesi.Orta
+                ? (barajGecti
+                    ? "🎉 TEBRİKLER! Orta Mod sınavını geçtiniz; Zor Mod (kod simülatörü) kilidi açıldı ve +1 İpucu Jetonu kaydedildi!"
+                    : "⚠️ Orta Mod barajının altında kaldınız. Zor Mod için sınavı tekrar deneyin.")
+                : (barajGecti
+                    ? "🎉 TEBRİKLER! %75 başarı barajını geçtiniz ve +1 İpucu Jetonu kaydedildi!"
+                    : "⚠️ %75 başarı barajının altında kaldınız. Yanlış açıklamalarını tekrar gözden geçirin.");
 
             string yanlisBilgi = _oturumYanlislari.Count > 0
                 ? $"\nYanlış Sayısı: {_oturumYanlislari.Count} (hata karnesine kaydedildi)"
@@ -507,6 +578,39 @@ namespace KademeliEgitimPlatformu
                 MessageBoxIcon.Information);
 
             EkranDegistir("ANA");
+        }
+
+        /// <summary>Oturumdaki yanlış cevapları kalıcı hata karnesine yazar.</summary>
+        private void YanlislariKarneyeKaydet()
+        {
+            if (_oturumYanlislari.Count == 0)
+                return;
+
+            try
+            {
+                KarneDeposu.Kaydet(_oturumYanlislari);
+            }
+            catch (Exception)
+            {
+                // Karne yazılamasa bile ilerleme ve sınav sonucu korunur.
+            }
+        }
+
+        /// <summary>Ara sınavı geçilen modülün kalıcı bayrağını işaretler.</summary>
+        private void AraSinaviGectiOlarakIsaretle(DisiplinTuru? disiplin)
+        {
+            switch (disiplin)
+            {
+                case DisiplinTuru.GorselProgramlama:
+                    _gorselAraSinavGecti = true;
+                    break;
+                case DisiplinTuru.VeriTabanlari:
+                    _veriTabaniAraSinavGecti = true;
+                    break;
+                case DisiplinTuru.SiberGuvenlik:
+                    _siberAraSinavGecti = true;
+                    break;
+            }
         }
     }
 }

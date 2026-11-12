@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>SoruPaketleyici</AssemblyName>
+    <RootNamespace>SoruPaketleyici</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Şifreleme ve doğrulama mantığı tek yerde kalsın diye ana projeyi kullanır. -->
+    <ProjectReference Include="..\..\KademeliEgitimPlatformu.csproj" />
+  </ItemGroup>
+
+</Project>
