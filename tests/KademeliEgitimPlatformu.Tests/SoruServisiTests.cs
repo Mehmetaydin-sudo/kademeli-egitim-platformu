@@ -147,5 +147,48 @@ namespace KademeliEgitimPlatformu.Tests
             Assert.NotEmpty(kolayOrtaSorular);
             Assert.NotEmpty(ortaZorSorular);
         }
+
+        [Fact]
+        public void VarsayilanSoruHavuzu_KolayOrtaVeZorSeviyeleriniIcerir()
+        {
+            var servis = new SoruServisi();
+
+            Assert.NotEmpty(servis.TumSorulariGetir(ZorlukSeviyesi.Kolay));
+            Assert.NotEmpty(servis.TumSorulariGetir(ZorlukSeviyesi.Orta));
+            Assert.NotEmpty(servis.TumSorulariGetir(ZorlukSeviyesi.Zor));
+        }
+
+        [Fact]
+        public void OtomatikSemaKontrolu_TumZorunluTablolariDogrular()
+        {
+            VeritabaniBaglantisi.TablolariHazirla();
+            using var baglanti = VeritabaniBaglantisi.Ac();
+
+            IReadOnlyList<string> eksikTablolar = VeritabaniBaglantisi.EksikTablolariGetir(baglanti);
+            Assert.Empty(eksikTablolar);
+        }
+
+        [Fact]
+        public void VeriYolu_SaltOkunurDosyalariBaseDirectoryden_CiktilariBelgelerimdenAlir()
+        {
+            Assert.StartsWith(AppContext.BaseDirectory, VeriYolu.AyarDosyasiYolu, StringComparison.OrdinalIgnoreCase);
+            Assert.StartsWith(AppContext.BaseDirectory, VeriYolu.SemaDosyasiYolu, StringComparison.OrdinalIgnoreCase);
+
+            string ciktiYolu = VeriYolu.GuvenliCiktiYolu("ornek_disa_aktarim.xlsx");
+            Assert.Equal(Path.Combine(VeriYolu.VeriKlasoru, "ornek_disa_aktarim.xlsx"), ciktiYolu);
+            Assert.DoesNotContain(AppContext.BaseDirectory.TrimEnd('\\', '/'), ciktiYolu, StringComparison.OrdinalIgnoreCase);
+        }
+
+        [Fact]
+        public void KullaniciDostuHataMesaji_BaglantiVeJsonHatalariniTurkceAciklar()
+        {
+            string baglantiMesaji = VeritabaniBaglantisi.KullaniciDostuHataMesaji(
+                new Npgsql.NpgsqlException("Connection refused"));
+            Assert.Contains("PostgreSQL 18 servisine bağlanılamadı", baglantiMesaji);
+
+            string jsonMesaji = VeritabaniBaglantisi.KullaniciDostuHataMesaji(
+                new InvalidDataException("Failed to load appsettings.json"));
+            Assert.Contains("appsettings.json", jsonMesaji);
+        }
     }
 }

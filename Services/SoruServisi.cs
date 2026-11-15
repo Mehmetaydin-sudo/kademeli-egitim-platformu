@@ -30,7 +30,7 @@ namespace KademeliEgitimPlatformu.Services
             _baglantiMetni = ozelBaglantiDizesi;
             VeritabaniBaglantisi.TablolariHazirla(_baglantiMetni);
 
-            if (varsayilanlariTohumla && SoruSayisi() == 0)
+            if (varsayilanlariTohumla && (SoruSayisi() == 0 || TumSorulariGetir(ZorlukSeviyesi.Zor).Count == 0))
             {
                 VarsayilanSorulariTohumla();
             }
@@ -1107,6 +1107,113 @@ namespace KademeliEgitimPlatformu.Services
                     [1] = "Tuz şifreyi kısaltmaz; özete eklenen rastgele bir değerdir.",
                     [2] = "Tuz gizli değildir ama şifreyi paylaşmaz; yalnızca özeti benzersizleştirir.",
                     [3] = "Tuzun veritabanı bağlantı hızıyla ilgisi yoktur."
+                }
+            },
+            new()
+            {
+                Disiplin = DisiplinTuru.VeriTabanlari,
+                Zorluk = ZorlukSeviyesi.Orta,
+                Etiket = "OrtaZorAraSinav",
+                Baslik = "PostgreSQL'de bir taboya yeni kayıt eklerken benzersizlik (UNIQUE) çakışması oluşursa mevcut kaydı güncellemek için hangi söz dizimi kullanılır?",
+                KodBlogu = "INSERT INTO ilerleme (anahtar, deger)\nVALUES (@anahtar, @deger)\n??? (anahtar) DO UPDATE SET deger = EXCLUDED.deger;",
+                Secenekler = new List<string>
+                {
+                    "ON CONFLICT",
+                    "ON DUPLICATE KEY",
+                    "MERGE INTO",
+                    "REPLACE INTO"
+                },
+                DogruSecenekIndex = 0,
+                YanlisCevapAciklamalari = new Dictionary<int, string>
+                {
+                    [1] = "ON DUPLICATE KEY söz dizimi MySQL'e özgüdür; PostgreSQL'de ON CONFLICT kullanılır.",
+                    [2] = "Bu cümlede INSERT ... ON CONFLICT yapısı kullanılmaktadır.",
+                    [3] = "REPLACE INTO SQLite/MySQL uzantısıdır; PostgreSQL'de desteklenmez."
+                }
+            },
+            new()
+            {
+                Disiplin = DisiplinTuru.SiberGuvenlik,
+                Zorluk = ZorlukSeviyesi.Orta,
+                Etiket = "OrtaZorAraSinav",
+                Baslik = "BCrypt.Net-Next ile üretilen `$2a$11$...` biçimindeki bir parola özetinde `11` sayısı neyi ifade eder?",
+                KodBlogu = "string hash = BCrypt.Net.BCrypt.HashPassword(parola, workFactor: 11);",
+                Secenekler = new List<string>
+                {
+                    "Parolanın maksimum karakter uzunluğunu",
+                    "Maliyet faktörünü (work factor / 2^11 iterasyon tur sayısını)",
+                    "Veritabanındaki tablo kimliğini (ID)",
+                    "Şifreleme anahtarının bayt cinsinden boyutunu"
+                },
+                DogruSecenekIndex = 1,
+                YanlisCevapAciklamalari = new Dictionary<int, string>
+                {
+                    [0] = "11 sayısı parola uzunluğu değil, algoritmanın çalışma maliyetidir.",
+                    [2] = "BCrypt özetinde veritabanı tablo ID'si yer almaz.",
+                    [3] = "Work factor anahtar boyutu değil, kaba kuvvet saldırılarını yavaşlatan üstel tur sayısıdır."
+                }
+            },
+            new()
+            {
+                Disiplin = DisiplinTuru.GorselProgramlama,
+                Zorluk = ZorlukSeviyesi.Zor,
+                Baslik = "WinForms'ta arka plan iş parçacığından (Task.Run) doğrudan bir UI kontrolünün özelliğini değiştirmeye çalışmak hangi hataya yol açar ve nasıl çözülmelidir?",
+                KodBlogu = "Task.Run(() => {\n    // Arka plan iş parçacığı:\n    lblDurum.Text = \"Tamamlandı\"; // HATA!\n});",
+                Secenekler = new List<string>
+                {
+                    "InvalidOperationException (Cross-thread operation not valid) oluşur; Invoke/BeginInvoke veya async-await ile UI iş parçacığına dönülmelidir.",
+                    "NullReferenceException oluşur; kontrol yeniden new ile oluşturulmalıdır.",
+                    "StackOverflowException oluşur; döngü kaldırılmalıdır.",
+                    "Derleme zamanı hatası (CS0029) oluşur; tür dönüşümü yapılmalıdır."
+                },
+                DogruSecenekIndex = 0,
+                YanlisCevapAciklamalari = new Dictionary<int, string>
+                {
+                    [1] = "Kontrol null değildir; sorun farklı bir iş parçacığından erişilmesidir.",
+                    [2] = "Özyinelemeli çağrı olmadığı için StackOverflowException oluşmaz.",
+                    [3] = "Bu durum derleme zamanında değil, çalışma zamanında (runtime) iş parçacığı denetiminde ortaya çıkar."
+                }
+            },
+            new()
+            {
+                Disiplin = DisiplinTuru.VeriTabanlari,
+                Zorluk = ZorlukSeviyesi.Zor,
+                Baslik = "Npgsql ile açılan bağlantıların `using` bloğu içinde kapatılmaması durumunda çalışma zamanında hangi kritik sorun meydana gelir?",
+                KodBlogu = "public int SayiGetir()\n{\n    var conn = new NpgsqlConnection(connStr);\n    conn.Open();\n    // Dispose/using unutuldu!\n    return 1;\n}",
+                Secenekler = new List<string>
+                {
+                    "Bağlantı havuzu (Connection Pool) tükenir ve yeni sorgular zaman aşımı (TimeoutException / NpgsqlException) ile başarısız olur.",
+                    "PostgreSQL tablosundaki tüm veriler otomatik olarak silinir.",
+                    "Sorgu sonuçları her zaman 0 döner.",
+                    "C# derleyicisi projeyi Release modunda derlemeyi reddeder."
+                },
+                DogruSecenekIndex = 0,
+                YanlisCevapAciklamalari = new Dictionary<int, string>
+                {
+                    [1] = "Açık kalan bağlantılar verileri silmez; bağlantı havuzunu tüketir.",
+                    [2] = "Sorgu sonucu değişmez; havuz dolduğunda yeni bağlantı açılamaz.",
+                    [3] = "Derleyici bunu engellemez; çalışma zamanında kaynak sızıntısı (resource leak) oluşur."
+                }
+            },
+            new()
+            {
+                Disiplin = DisiplinTuru.SiberGuvenlik,
+                Zorluk = ZorlukSeviyesi.Zor,
+                Baslik = "Windows `Program Files` altına kurulan bir masaüstü uygulamasının çalışma zamanında log veya Excel çıktılarını `AppContext.BaseDirectory` içine yazmaya çalışması neden güvenlik ve çalışma hatasına yol açar?",
+                KodBlogu = "// C:\\Program Files\\KademeliEgitimPlatformu altında çalışırken:\nFile.WriteAllText(Path.Combine(AppContext.BaseDirectory, \"rapor.xlsx\"), veri);",
+                Secenekler = new List<string>
+                {
+                    "Standart kullanıcı oturumunda Program Files dizini salt-okunurdur; UnauthorizedAccessException fırlatılır. Çıktılar MyDocuments veya LocalApplicationData altına yazılmalıdır.",
+                    "Windows yalnızca .txt uzantılı dosyaların Program Files içine yazılmasına izin verir.",
+                    "AppContext.BaseDirectory her zaman boş string döndürür.",
+                    "PostgreSQL servisi Program Files içindeki dosyaları otomatik olarak siler."
+                },
+                DogruSecenekIndex = 0,
+                YanlisCevapAciklamalari = new Dictionary<int, string>
+                {
+                    [1] = "Program Files dizininde kısıtlama dosya uzantısına göre değil, klasör ACL izinlerine göredir.",
+                    [2] = "AppContext.BaseDirectory uygulamanın çalıştığı dizini döndürür, boş dönmez.",
+                    [3] = "PostgreSQL servisinin uygulama klasöründeki dosyaları silme yetkisi veya görevi yoktur."
                 }
             }
         };

@@ -1,14 +1,16 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net.Sockets;
+using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
 
 namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
-    /// PostgreSQL 18 (kademeli_egitim) veritabanı bağlantılarını merkezi olarak yönetir.
-    /// Bağlantı dizesini AppContext.BaseDirectory altındaki appsettings.json içinden
+    /// PostgreSQL 18 (kademeli_egitim) veritabanı bağlantılarını ve otomatik şema kurulumunu (Auto-Migration)
+    /// merkezi olarak yönetir. Bağlantı dizesini AppContext.BaseDirectory altındaki appsettings.json içinden
     /// "ConnectionStrings:DefaultConnection" anahtarıyla Microsoft.Extensions.Configuration.Json ile okur.
     /// </summary>
     public static class VeritabaniBaglantisi
@@ -16,6 +18,18 @@ namespace KademeliEgitimPlatformu.Services
         private const string VarsayilanBaglantiAdi = "DefaultConnection";
         private static readonly object Kilit = new();
         private static bool _semaHazir;
+
+        /// <summary>database/schema.sql içinde yer alan ve uygulamada zorunlu olan 7 PostgreSQL tablosu.</summary>
+        public static IReadOnlyList<string> ZorunluTablolar { get; } = new[]
+        {
+            "kullanicilar",
+            "sorular",
+            "kullanici_ilerleme",
+            "ilerleme",
+            "seviye_gecis_sinavlari",
+            "yanlis_cevaplar",
+            "meta"
+        };
 
         /// <summary>
         /// AppContext.BaseDirectory üzerinden appsettings.json dosyasındaki DefaultConnection bağlantı dizesini okur.
@@ -51,7 +65,7 @@ namespace KademeliEgitimPlatformu.Services
 
                 yapilandirma = builder.Build();
             }
-            catch (Exception ex) when (ex is InvalidDataException || ex is FormatException)
+            catch (Exception ex) when (ex is InvalidDataException || ex is FormatException || ex is JsonException)
             {
                 throw new InvalidOperationException(
                     "'appsettings.json' yapılandırma dosyası bozuk veya geçersiz JSON biçimi içeriyor. " +
@@ -91,9 +105,41 @@ namespace KademeliEgitimPlatformu.Services
         }
 
         /// <summary>
-        /// Sıfır kurulumda 'kademeli_egitim' veritabanı yoksa oluşturmayı dener ve
-        /// database/schema.sql (CREATE TABLE IF NOT EXISTS ...) tablolarının eksiksiz kurulduğundan emin olur.
-        /// İlk bağlantıda bir kez çalışır; tablolar zaten varsa hiçbir veriyi ezmez.
+        /// Veritabanında zorunlu tablolardan herhangi birinin eksik olup olmadığını kontrol eder.
+        /// </summary>
+        public static IReadOnlyList<string> EksikTablolariGetir(NpgsqlConnection baglanti)
+        {
+            ArgumentNullException.ThrowIfNull(baglanti);
+
+            var mevcutTablolar = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            const string sql = @"
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public';";
+
+            using (var komut = new NpgsqlCommand(sql, baglanti))
+            using (var okuyucu = komut.ExecuteReader())
+            {
+                while (okuyucu.Read())
+                {
+                    mevcutTablolar.Add(okuyucu.GetString(0));
+                }
+            }
+
+            var eksikler = new List<string>();
+            foreach (string tablo in ZorunluTablolar)
+            {
+                if (!mevcutTablolar.Contains(tablo))
+                    eksikler.Add(tablo);
+            }
+
+            return eksikler;
+        }
+
+        /// <summary>
+        /// Sıfır kurulumda 'kademeli_egitim' veritabanı yoksa oluşturmayı dener,
+        /// eksik tablo olup olmadığını kontrol eder ve database/schema.sql (CREATE TABLE IF NOT EXISTS ...)
+        /// betiğini güvenli şekilde çalıştırarak tüm tabloları hazırlar.
         /// </summary>
         public static void TablolariHazirla(string? ozelBaglantiDizesi = null)
         {
@@ -123,9 +169,11 @@ namespace KademeliEgitimPlatformu.Services
                         baglanti.Open();
                     }
 
-                    string calistirilacakSema = SemaMetniniYukle();
-                    using (var komut = new NpgsqlCommand(calistirilacakSema, baglanti))
+                    IReadOnlyList<string> eksikTablolar = EksikTablolariGetir(baglanti);
+                    if (eksikTablolar.Count > 0 || !_semaHazir)
                     {
+                        string calistirilacakSema = SemaMetniniYukle();
+                        using var komut = new NpgsqlCommand(calistirilacakSema, baglanti);
                         komut.ExecuteNonQuery();
                     }
 
@@ -144,20 +192,32 @@ namespace KademeliEgitimPlatformu.Services
         /// </summary>
         public static string KullaniciDostuHataMesaji(Exception ex)
         {
+            if (ex == null)
+                return "Bilinmeyen bir veritabanı hatası oluştu.";
+
             if (ex is PostgresException pgEx)
             {
                 return pgEx.SqlState switch
                 {
                     "28P01" or "28000" =>
                         "PostgreSQL kullanıcı adı veya şifresi hatalı.\n\n" +
-                        "Lütfen uygulama klasöründeki 'appsettings.json' dosyasında yer alan " +
+                        "Çözüm: Uygulama klasöründeki 'appsettings.json' dosyasında yer alan " +
                         "'ConnectionStrings:DefaultConnection' içindeki Password değerini yerel PostgreSQL şifrenizle güncelleyin.",
                     "3D000" =>
                         "PostgreSQL sunucusunda 'kademeli_egitim' veritabanı bulunamadı ve otomatik oluşturulamadı.\n\n" +
-                        "Lütfen pgAdmin veya psql üzerinden 'CREATE DATABASE kademeli_egitim;' komutunu çalıştırın.",
+                        "Çözüm: pgAdmin veya psql üzerinden 'CREATE DATABASE kademeli_egitim;' komutunu çalıştırın.",
                     _ =>
                         $"PostgreSQL veritabanı işlemi sırasında hata oluştu (Kod: {pgEx.SqlState}).\n\nAyrıntı: {pgEx.MessageText}"
                 };
+            }
+
+            if (ex is JsonException || ex is InvalidDataException || ex is FormatException ||
+                (ex is InvalidOperationException && ex.Message.Contains("appsettings", StringComparison.OrdinalIgnoreCase)))
+            {
+                return "Uygulama yapılandırma dosyası ('appsettings.json') eksik veya bozuk JSON içeriyor.\n\n" +
+                       "Çözüm: Uygulama dizinindeki 'appsettings.example.json' dosyasını 'appsettings.json' olarak kopyalayıp " +
+                       "PostgreSQL bağlantı bilgilerinizi (Host, Port, Username, Password) kontrol edin.\n\n" +
+                       $"Ayrıntı: {ex.Message}";
             }
 
             if (ex is NpgsqlException || ex.InnerException is SocketException || ex is SocketException || ex is TimeoutException)
@@ -248,8 +308,7 @@ namespace KademeliEgitimPlatformu.Services
 
         private static string AyarKlasorunuBul()
         {
-            // Salt-okunur yapılandırma dosyaları Directory.GetCurrentDirectory() yerine
-            // her zaman AppContext.BaseDirectory tabanlı aranır.
+            // Salt-okunur yapılandırma dosyaları her zaman AppContext.BaseDirectory tabanlı aranır.
             DirectoryInfo? dizin = new(AppContext.BaseDirectory);
             while (dizin != null)
             {
