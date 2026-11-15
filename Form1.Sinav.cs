@@ -257,9 +257,23 @@ namespace KademeliEgitimPlatformu
             _aktifSinavDisiplini = disiplin;
             _aktifZorluk = zorluk;
 
-            List<Soru> sorular = disiplin.HasValue
-                ? SoruDeposu.SorulariFiltrele(disiplin.Value, zorluk)
-                : SoruDeposu.TumSorulariGetir(zorluk);
+            List<Soru> sorular;
+            try
+            {
+                sorular = disiplin.HasValue
+                    ? SoruDeposu.SorulariFiltrele(disiplin.Value, zorluk)
+                    : SoruDeposu.TumSorulariGetir(zorluk);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Sınav soruları PostgreSQL veritabanından yüklenemedi.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                    "Veritabanı Bağlantı Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
 
             SinaviBaslatInternal(sorular, baslik, disiplin, zorluk);
         }
@@ -270,7 +284,21 @@ namespace KademeliEgitimPlatformu
         /// </summary>
         private void AraSinaviBaslat(DisiplinTuru disiplin)
         {
-            List<Soru> sorular = SoruDeposu.AraSinavSorulariniGetir(disiplin);
+            List<Soru> sorular;
+            try
+            {
+                sorular = SoruDeposu.AraSinavSorulariniGetir(disiplin);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Ara sınav soruları PostgreSQL veritabanından yüklenemedi.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                    "Veritabanı Bağlantı Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
 
             if (sorular.Count == 0)
             {
@@ -297,7 +325,22 @@ namespace KademeliEgitimPlatformu
         /// </summary>
         private void SeviyeGecisAraSinaviniBaslat(ZorlukSeviyesi hedefZorluk)
         {
-            List<Soru> sorular = SoruDeposu.SeviyeGecisSorulariniGetir(hedefZorluk);
+            List<Soru> sorular;
+            try
+            {
+                sorular = SoruDeposu.SeviyeGecisSorulariniGetir(hedefZorluk);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Seviye geçiş ara sınavı soruları PostgreSQL veritabanından yüklenemedi.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                    "Veritabanı Bağlantı Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+                return;
+            }
+
             if (sorular.Count == 0)
             {
                 MessageBox.Show(

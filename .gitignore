@@ -433,6 +433,7 @@ Data/*.db-shm
 Data/*.db-wal
 Data/*.log
 appsettings.json
+publish_cikti/
 
 
 # Okul bilgisayarlari icin x86 yayin profili repoda tutulur.

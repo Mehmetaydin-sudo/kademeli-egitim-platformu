@@ -36,6 +36,7 @@ namespace KademeliEgitimPlatformu
         private bool _anaMenuKirli = true;
         private bool _sinavHazir;
         private bool _simulatorHazir;
+        private bool _veritabaniUyarisiGosterildi;
 
         private List<Soru> _aktifSorular = new();
         private List<SoruGorunumu> _gorunumler = new();
@@ -128,13 +129,17 @@ namespace KademeliEgitimPlatformu
                 _veriTabaniAraSinavGecti = durum.VeriTabaniAraSinavGecti;
                 _siberAraSinavGecti = durum.SiberAraSinavGecti;
                 _ortaModGecti = durum.OrtaModGecti;
+                _veritabaniUyarisiGosterildi = false;
             }
             catch (Exception ex)
             {
-                // Bozuk kilitli veritabanı uygulamayı açılmaz hale getirmesin.
+                _veritabaniUyarisiGosterildi = true;
+                // Veritabanı kapalı veya ayarlar hatalı olduğunda uygulama çökmesin,
+                // kullanıcıya anlaşılır Türkçe açıklama gösterip varsayılan değerlerle açılsın.
                 MessageBox.Show(
-                    "Kayıtlı ilerleme okunamadı, varsayılan değerlerle başlanıyor.\n\n" + ex.Message,
-                    "İlerleme Yüklenemedi",
+                    "Kayıtlı ilerleme okunamadı, varsayılan değerlerle başlanıyor.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                    "PostgreSQL Bağlantı Uyarısı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);
             }
@@ -152,7 +157,8 @@ namespace KademeliEgitimPlatformu
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "İlerleme kaydedilemedi. Veri klasörünün yazılabilir olduğundan emin olun.\n\n" + ex.Message,
+                    "İlerleme PostgreSQL veritabanına kaydedilemedi.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
                     "Kayıt Hatası",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Warning);

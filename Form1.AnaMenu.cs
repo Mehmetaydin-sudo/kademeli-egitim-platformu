@@ -56,12 +56,20 @@ namespace KademeliEgitimPlatformu
             btnUsbPaketYukle.FlatAppearance.BorderColor = Color.FromArgb(56, 189, 248);
             btnUsbPaketYukle.Click += UsbPaketYukle_Click;
 
+            int soruSayisi = GuvenliSoruSayisi(out bool veritabaniAktif);
+
             Label lblCevrimdisi = new()
             {
-                Text = "  ● Yerel PostgreSQL 18 Aktif  ",
+                Text = veritabaniAktif
+                    ? "  ● Yerel PostgreSQL 18 Aktif  "
+                    : "  ● PostgreSQL Bağlantısı Yok  ",
                 Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(74, 222, 128),
-                BackColor = Color.FromArgb(20, 65, 40),
+                ForeColor = veritabaniAktif
+                    ? Color.FromArgb(74, 222, 128)
+                    : Color.FromArgb(251, 146, 60),
+                BackColor = veritabaniAktif
+                    ? Color.FromArgb(20, 65, 40)
+                    : Color.FromArgb(69, 26, 26),
                 Dock = DockStyle.Right,
                 AutoSize = true,
                 Padding = new Padding(10, 11, 10, 11)
@@ -75,7 +83,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblAltBaslik = new()
             {
-                Text = $"Eğitim Modülleri   •   PostgreSQL Soru Havuzu: {SoruDeposu.SoruSayisi()} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
+                Text = $"Eğitim Modülleri   •   PostgreSQL Soru Havuzu: {soruSayisi} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
@@ -435,12 +443,39 @@ namespace KademeliEgitimPlatformu
             EkranDegistir("SIM");
         }
 
+        private int GuvenliSoruSayisi(out bool veritabaniAktif)
+        {
+            try
+            {
+                int adet = SoruDeposu.SoruSayisi();
+                veritabaniAktif = true;
+                return adet;
+            }
+            catch (Exception ex)
+            {
+                veritabaniAktif = false;
+                if (!_veritabaniUyarisiGosterildi)
+                {
+                    _veritabaniUyarisiGosterildi = true;
+                    MessageBox.Show(
+                        VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                        "PostgreSQL Bağlantı Hatası",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                }
+                return 0;
+            }
+        }
+
         private void UsbPaketYukle_Click(object? sender, EventArgs e)
         {
+            string belgelerim = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
             using OpenFileDialog ofd = new()
             {
                 Title = "Soru Dosyası Seçin (.xlsx veya .csv)",
-                Filter = "Soru Dosyası (*.xlsx;*.csv)|*.xlsx;*.csv|Excel Dosyası (*.xlsx)|*.xlsx|CSV Dosyası (*.csv)|*.csv"
+                Filter = "Soru Dosyası (*.xlsx;*.csv)|*.xlsx;*.csv|Excel Dosyası (*.xlsx)|*.xlsx|CSV Dosyası (*.csv)|*.csv",
+                InitialDirectory = Directory.Exists(belgelerim) ? belgelerim : string.Empty
             };
 
             if (ofd.ShowDialog() != DialogResult.OK)
@@ -479,7 +514,7 @@ namespace KademeliEgitimPlatformu
             catch (UnauthorizedAccessException ex)
             {
                 MessageBox.Show(
-                    "Paket dosyasına erişim izni yok. Dosyayı farklı bir klasöre kopyalayıp tekrar deneyin.\n\n" + ex.Message,
+                    "Paket dosyasına erişim izni yok. Dosyayı Belgelerim veya Masaüstü klasörüne kopyalayıp tekrar deneyin.\n\n" + ex.Message,
                     "Erişim Hatası",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
@@ -487,7 +522,8 @@ namespace KademeliEgitimPlatformu
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Paket yüklenirken beklenmeyen bir hata oluştu.\n\n" + ex.Message,
+                    "Paket yüklenirken bir hata oluştu.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
                     "Hata",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);

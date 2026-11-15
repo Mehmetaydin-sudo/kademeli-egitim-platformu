@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Net.Sockets;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
 
@@ -7,8 +8,8 @@ namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
     /// PostgreSQL 18 (kademeli_egitim) veritabanı bağlantılarını merkezi olarak yönetir.
-    /// Bağlantı dizesini appsettings.json içindeki "ConnectionStrings:DefaultConnection"
-    /// anahtarından Microsoft.Extensions.Configuration.Json ile okur.
+    /// Bağlantı dizesini AppContext.BaseDirectory altındaki appsettings.json içinden
+    /// "ConnectionStrings:DefaultConnection" anahtarıyla Microsoft.Extensions.Configuration.Json ile okur.
     /// </summary>
     public static class VeritabaniBaglantisi
     {
@@ -17,7 +18,7 @@ namespace KademeliEgitimPlatformu.Services
         private static bool _semaHazir;
 
         /// <summary>
-        /// appsettings.json dosyasından DefaultConnection bağlantı dizesini okur.
+        /// AppContext.BaseDirectory üzerinden appsettings.json dosyasındaki DefaultConnection bağlantı dizesini okur.
         /// Özel bir bağlantı dizesi verilirse (ör. test ortamı) doğrudan onu döndürür.
         /// </summary>
         public static string BaglantiDizesiniAl(string? ozelBaglantiDizesi = null)
@@ -30,19 +31,40 @@ namespace KademeliEgitimPlatformu.Services
                 return ortamBaglantisi;
 
             string ayarKlasoru = AyarKlasorunuBul();
+            string ayarDosyasi = Path.Combine(ayarKlasoru, "appsettings.json");
+            string ornekAyarDosyasi = Path.Combine(ayarKlasoru, "appsettings.example.json");
 
-            IConfigurationRoot yapilandirma = new ConfigurationBuilder()
-                .SetBasePath(ayarKlasoru)
-                .AddJsonFile("appsettings.example.json", optional: true, reloadOnChange: false)
-                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false)
-                .Build();
+            if (!File.Exists(ayarDosyasi) && !File.Exists(ornekAyarDosyasi))
+            {
+                throw new InvalidOperationException(
+                    $"Uygulama dizininde ({AppContext.BaseDirectory}) 'appsettings.json' yapılandırma dosyası bulunamadı. " +
+                    "Lütfen 'appsettings.example.json' dosyasını 'appsettings.json' adıyla kopyalayıp PostgreSQL bağlantı bilgilerinizi girin.");
+            }
+
+            IConfigurationRoot yapilandirma;
+            try
+            {
+                var builder = new ConfigurationBuilder()
+                    .SetBasePath(ayarKlasoru)
+                    .AddJsonFile("appsettings.example.json", optional: true, reloadOnChange: false)
+                    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+
+                yapilandirma = builder.Build();
+            }
+            catch (Exception ex) when (ex is InvalidDataException || ex is FormatException)
+            {
+                throw new InvalidOperationException(
+                    "'appsettings.json' yapılandırma dosyası bozuk veya geçersiz JSON biçimi içeriyor. " +
+                    "Lütfen dosya içeriğini ve tırnak/virgül işaretlerini kontrol edin.",
+                    ex);
+            }
 
             string? baglantiDizesi = yapilandirma.GetConnectionString(VarsayilanBaglantiAdi);
             if (string.IsNullOrWhiteSpace(baglantiDizesi))
             {
                 throw new InvalidOperationException(
                     "Veritabanı bağlantı dizesi ('ConnectionStrings:DefaultConnection') " +
-                    "appsettings.json içinde bulunamadı.");
+                    "appsettings.json içinde bulunamadı veya boş bırakılmış.");
             }
 
             return baglantiDizesi;
@@ -56,12 +78,21 @@ namespace KademeliEgitimPlatformu.Services
         {
             string baglantiMetni = BaglantiDizesiniAl(ozelBaglantiDizesi);
             var baglanti = new NpgsqlConnection(baglantiMetni);
-            baglanti.Open();
-            return baglanti;
+            try
+            {
+                baglanti.Open();
+                return baglanti;
+            }
+            catch
+            {
+                baglanti.Dispose();
+                throw;
+            }
         }
 
         /// <summary>
-        /// PostgreSQL tablolarının (database/schema.sql ile uyumlu) mevcut olduğundan emin olur.
+        /// Sıfır kurulumda 'kademeli_egitim' veritabanı yoksa oluşturmayı dener ve
+        /// database/schema.sql (CREATE TABLE IF NOT EXISTS ...) tablolarının eksiksiz kurulduğundan emin olur.
         /// İlk bağlantıda bir kez çalışır; tablolar zaten varsa hiçbir veriyi ezmez.
         /// </summary>
         public static void TablolariHazirla(string? ozelBaglantiDizesi = null)
@@ -74,47 +105,167 @@ namespace KademeliEgitimPlatformu.Services
                 if (_semaHazir && string.IsNullOrWhiteSpace(ozelBaglantiDizesi))
                     return;
 
-                using var baglanti = Ac(ozelBaglantiDizesi);
-                using var komut = new NpgsqlCommand(SemaSql, baglanti);
-                komut.ExecuteNonQuery();
+                string baglantiMetni = BaglantiDizesiniAl(ozelBaglantiDizesi);
 
-                if (string.IsNullOrWhiteSpace(ozelBaglantiDizesi))
-                    _semaHazir = true;
+                NpgsqlConnection? baglanti = null;
+                try
+                {
+                    try
+                    {
+                        baglanti = new NpgsqlConnection(baglantiMetni);
+                        baglanti.Open();
+                    }
+                    catch (PostgresException pgEx) when (pgEx.SqlState == "3D000")
+                    {
+                        baglanti?.Dispose();
+                        VeritabaniYoksaOlustur(baglantiMetni);
+                        baglanti = new NpgsqlConnection(baglantiMetni);
+                        baglanti.Open();
+                    }
+
+                    string calistirilacakSema = SemaMetniniYukle();
+                    using (var komut = new NpgsqlCommand(calistirilacakSema, baglanti))
+                    {
+                        komut.ExecuteNonQuery();
+                    }
+
+                    if (string.IsNullOrWhiteSpace(ozelBaglantiDizesi))
+                        _semaHazir = true;
+                }
+                finally
+                {
+                    baglanti?.Dispose();
+                }
             }
+        }
+
+        /// <summary>
+        /// Veritabanı ve yapılandırma hatalarını son kullanıcının anlayacağı Türkçe açıklamaya dönüştürür.
+        /// </summary>
+        public static string KullaniciDostuHataMesaji(Exception ex)
+        {
+            if (ex is PostgresException pgEx)
+            {
+                return pgEx.SqlState switch
+                {
+                    "28P01" or "28000" =>
+                        "PostgreSQL kullanıcı adı veya şifresi hatalı.\n\n" +
+                        "Lütfen uygulama klasöründeki 'appsettings.json' dosyasında yer alan " +
+                        "'ConnectionStrings:DefaultConnection' içindeki Password değerini yerel PostgreSQL şifrenizle güncelleyin.",
+                    "3D000" =>
+                        "PostgreSQL sunucusunda 'kademeli_egitim' veritabanı bulunamadı ve otomatik oluşturulamadı.\n\n" +
+                        "Lütfen pgAdmin veya psql üzerinden 'CREATE DATABASE kademeli_egitim;' komutunu çalıştırın.",
+                    _ =>
+                        $"PostgreSQL veritabanı işlemi sırasında hata oluştu (Kod: {pgEx.SqlState}).\n\nAyrıntı: {pgEx.MessageText}"
+                };
+            }
+
+            if (ex is NpgsqlException || ex.InnerException is SocketException || ex is SocketException || ex is TimeoutException)
+            {
+                return "Yerel PostgreSQL 18 servisine bağlanılamadı.\n\n" +
+                       "Lütfen şu adımları kontrol edin:\n" +
+                       "1) Windows Hizmetler (services.msc) üzerinden 'postgresql-x64-18' servisinin çalıştığından emin olun.\n" +
+                       "2) PostgreSQL'in 5432 portunu dinlediğini kontrol edin.\n" +
+                       "3) 'appsettings.json' dosyasındaki bağlantı ayarlarının doğru olduğunu doğrulayın.\n\n" +
+                       $"Teknik Ayrıntı: {ex.Message}";
+            }
+
+            return ex.Message;
+        }
+
+        private static void VeritabaniYoksaOlustur(string baglantiMetni)
+        {
+            var kurucu = new NpgsqlConnectionStringBuilder(baglantiMetni);
+            string? hedefVeritabani = kurucu.Database;
+            if (string.IsNullOrWhiteSpace(hedefVeritabani))
+                return;
+
+            // SQL injection önlemi: yalnızca harf, rakam ve alt çizgi içeren veritabanı adlarına izin ver.
+            foreach (char c in hedefVeritabani)
+            {
+                if (!char.IsLetterOrDigit(c) && c != '_')
+                    return;
+            }
+
+            kurucu.Database = "postgres";
+            using var yonetimBaglantisi = new NpgsqlConnection(kurucu.ConnectionString);
+            yonetimBaglantisi.Open();
+
+            using var kontrolKomutu = new NpgsqlCommand(
+                "SELECT 1 FROM pg_database WHERE datname = @ad;",
+                yonetimBaglantisi);
+            kontrolKomutu.Parameters.AddWithValue("@ad", hedefVeritabani);
+
+            object? mevcut = kontrolKomutu.ExecuteScalar();
+            if (mevcut == null)
+            {
+                using var olusturKomutu = new NpgsqlCommand(
+                    $"CREATE DATABASE \"{hedefVeritabani}\" WITH ENCODING 'UTF8';",
+                    yonetimBaglantisi);
+                olusturKomutu.ExecuteNonQuery();
+            }
+        }
+
+        private static string SemaMetniniYukle()
+        {
+            string? semaDosyaYolu = SemaDosyasiYolunuBul();
+            if (!string.IsNullOrEmpty(semaDosyaYolu) && File.Exists(semaDosyaYolu))
+            {
+                try
+                {
+                    string dosyaIcerigi = File.ReadAllText(semaDosyaYolu);
+                    if (!string.IsNullOrWhiteSpace(dosyaIcerigi))
+                        return dosyaIcerigi;
+                }
+                catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+                {
+                    // Dosya okunamazsa gömülü şema yedek olarak kullanılır.
+                }
+            }
+
+            return SemaSql;
+        }
+
+        private static string? SemaDosyasiYolunuBul()
+        {
+            // Önce doğrudan AppContext.BaseDirectory\database\schema.sql kontrol edilir.
+            string dogrudanYol = Path.Combine(AppContext.BaseDirectory, "database", "schema.sql");
+            if (File.Exists(dogrudanYol))
+                return dogrudanYol;
+
+            DirectoryInfo? dizin = new(AppContext.BaseDirectory);
+            while (dizin != null)
+            {
+                string aday = Path.Combine(dizin.FullName, "database", "schema.sql");
+                if (File.Exists(aday))
+                    return aday;
+
+                dizin = dizin.Parent;
+            }
+
+            return null;
         }
 
         private static string AyarKlasorunuBul()
         {
-            string[] adaylar =
+            // Salt-okunur yapılandırma dosyaları Directory.GetCurrentDirectory() yerine
+            // her zaman AppContext.BaseDirectory tabanlı aranır.
+            DirectoryInfo? dizin = new(AppContext.BaseDirectory);
+            while (dizin != null)
             {
-                AppContext.BaseDirectory,
-                Directory.GetCurrentDirectory()
-            };
+                if (File.Exists(Path.Combine(dizin.FullName, "appsettings.json")))
+                    return dizin.FullName;
 
-            // Önce gerçek appsettings.json dosyasını ara
-            foreach (string baslangic in adaylar)
-            {
-                DirectoryInfo? dizin = new(baslangic);
-                while (dizin != null)
-                {
-                    if (File.Exists(Path.Combine(dizin.FullName, "appsettings.json")))
-                        return dizin.FullName;
-
-                    dizin = dizin.Parent;
-                }
+                dizin = dizin.Parent;
             }
 
-            // Bulunamazsa şablon appsettings.example.json dosyasını ara
-            foreach (string baslangic in adaylar)
+            dizin = new DirectoryInfo(AppContext.BaseDirectory);
+            while (dizin != null)
             {
-                DirectoryInfo? dizin = new(baslangic);
-                while (dizin != null)
-                {
-                    if (File.Exists(Path.Combine(dizin.FullName, "appsettings.example.json")))
-                        return dizin.FullName;
+                if (File.Exists(Path.Combine(dizin.FullName, "appsettings.example.json")))
+                    return dizin.FullName;
 
-                    dizin = dizin.Parent;
-                }
+                dizin = dizin.Parent;
             }
 
             return AppContext.BaseDirectory;
@@ -223,6 +374,10 @@ CREATE INDEX IF NOT EXISTS ix_yanlis_cevaplar_tarih
 CREATE TABLE IF NOT EXISTS meta (
     anahtar VARCHAR(100) PRIMARY KEY,
     deger   TEXT         NOT NULL
-);";
+);
+
+INSERT INTO meta (anahtar, deger)
+VALUES ('semaSurumu', '3')
+ON CONFLICT (anahtar) DO NOTHING;";
     }
 }

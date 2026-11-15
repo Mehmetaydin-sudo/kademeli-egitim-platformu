@@ -204,26 +204,28 @@ namespace KademeliEgitimPlatformu.Services
 
         /// <summary>
         /// Mevcut soru havuzunu ClosedXML ile Excel (.xlsx) veya .csv dosyasına dışa aktarır.
+        /// Salt-okunur (Program Files) veya göreli yolları Belgelerim\KademeliEgitimPlatformu klasörüne yönlendirir.
         /// </summary>
         public int DisariAktar(string ciktiDosyaYolu)
         {
             if (string.IsNullOrWhiteSpace(ciktiDosyaYolu))
                 throw new ArgumentException("Çıktı dosya yolu boş olamaz.", nameof(ciktiDosyaYolu));
 
+            string guvenliCiktiYolu = VeriYolu.GuvenliCiktiYolu(ciktiDosyaYolu);
             List<Soru> sorular = TumSorulariGetir();
-            string uzanti = Path.GetExtension(ciktiDosyaYolu).ToLowerInvariant();
+            string uzanti = Path.GetExtension(guvenliCiktiYolu).ToLowerInvariant();
 
-            string? klasor = Path.GetDirectoryName(Path.GetFullPath(ciktiDosyaYolu));
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(guvenliCiktiYolu));
             if (!string.IsNullOrEmpty(klasor))
                 Directory.CreateDirectory(klasor);
 
             switch (uzanti)
             {
                 case ".xlsx":
-                    ExceleYaz(sorular, ciktiDosyaYolu);
+                    ExceleYaz(sorular, guvenliCiktiYolu);
                     break;
                 case ".csv":
-                    CsvyeYaz(sorular, ciktiDosyaYolu);
+                    CsvyeYaz(sorular, guvenliCiktiYolu);
                     break;
                 default:
                     throw new InvalidDataException("Dışa aktarım için yalnızca .xlsx ve .csv uzantıları desteklenir.");
@@ -241,6 +243,7 @@ namespace KademeliEgitimPlatformu.Services
             if (!File.Exists(kaynakYolu))
                 throw new FileNotFoundException("Kaynak soru dosyası bulunamadı.", kaynakYolu);
 
+            string guvenliCiktiYolu = VeriYolu.GuvenliCiktiYolu(ciktiYolu);
             string kaynakUzanti = Path.GetExtension(kaynakYolu).ToLowerInvariant();
             List<Soru> sorular = kaynakUzanti switch
             {
@@ -261,18 +264,18 @@ namespace KademeliEgitimPlatformu.Services
                 gecerliSorular.Add(soru);
             }
 
-            string? klasor = Path.GetDirectoryName(Path.GetFullPath(ciktiYolu));
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(guvenliCiktiYolu));
             if (!string.IsNullOrEmpty(klasor))
                 Directory.CreateDirectory(klasor);
 
-            string ciktiUzanti = Path.GetExtension(ciktiYolu).ToLowerInvariant();
+            string ciktiUzanti = Path.GetExtension(guvenliCiktiYolu).ToLowerInvariant();
             switch (ciktiUzanti)
             {
                 case ".xlsx":
-                    ExceleYaz(gecerliSorular, ciktiYolu);
+                    ExceleYaz(gecerliSorular, guvenliCiktiYolu);
                     break;
                 case ".csv":
-                    CsvyeYaz(gecerliSorular, ciktiYolu);
+                    CsvyeYaz(gecerliSorular, guvenliCiktiYolu);
                     break;
                 default:
                     throw new InvalidDataException("Çıktı paketi yalnızca .xlsx veya .csv formatında olabilir.");

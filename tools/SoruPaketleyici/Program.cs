@@ -21,18 +21,20 @@ try
 {
     if (args.Length == 1)
     {
+        string hedefYol = VeriYolu.GuvenliCiktiYolu(args[0]);
         var servis = new SoruServisi();
-        int adet = servis.DisariAktar(args[0]);
-        Console.WriteLine($"PostgreSQL soru havuzu dışa aktarıldı: {args[0]} ({adet} soru)");
+        int adet = servis.DisariAktar(hedefYol);
+        Console.WriteLine($"PostgreSQL soru havuzu dışa aktarıldı: {hedefYol} ({adet} soru)");
         return 0;
     }
 
     string ilkArg = args[0].ToLowerInvariant();
     if (ilkArg == "disari-aktar")
     {
+        string hedefYol = VeriYolu.GuvenliCiktiYolu(args[1]);
         var servis = new SoruServisi();
-        int adet = servis.DisariAktar(args[1]);
-        Console.WriteLine($"PostgreSQL soru havuzu dışa aktarıldı: {args[1]} ({adet} soru)");
+        int adet = servis.DisariAktar(hedefYol);
+        Console.WriteLine($"PostgreSQL soru havuzu dışa aktarıldı: {hedefYol} ({adet} soru)");
         return 0;
     }
 
@@ -44,13 +46,14 @@ try
         return 0;
     }
 
-    int paketAdet = SoruServisi.PaketOlustur(args[0], args[1]);
-    Console.WriteLine($"USB soru paketi oluşturuldu: {args[1]}");
+    string guvenliPaketYolu = VeriYolu.GuvenliCiktiYolu(args[1]);
+    int paketAdet = SoruServisi.PaketOlustur(args[0], guvenliPaketYolu);
+    Console.WriteLine($"USB soru paketi oluşturuldu: {guvenliPaketYolu}");
     Console.WriteLine($"Doğrulanan ve paketlenen soru sayısı: {paketAdet}");
     return 0;
 }
 catch (Exception ex)
 {
-    Console.Error.WriteLine("Paket işlemi başarısız: " + ex.Message);
+    Console.Error.WriteLine("Paket işlemi başarısız: " + VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex));
     return 1;
 }
