@@ -4,29 +4,21 @@ using System.IO;
 namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
-    /// Uygulama verilerinin (SQLite dosyaları) yazılacağı klasörü belirler.
-    /// Önce uygulamanın yanındaki Data klasörü denenir (taşınabilir / USB kullanımı).
-    /// Klasör yazılamıyorsa (Program Files, salt okunur medya) %LOCALAPPDATA% altına geçilir.
-    /// Böylece uygulama yönetici izni olmadan da açılabilir.
+    /// Uygulama dışa aktarım ve geçici dosyalarının yazılacağı klasörü belirler.
+    /// Veritabanı işlemleri yerel PostgreSQL 18 (kademeli_egitim) üzerinden yürütülür;
+    /// yerel .db dosyaları kullanılmaz.
     /// </summary>
     public static class VeriYolu
     {
         private const string UygulamaAdi = "KademeliEgitimPlatformu";
         private static string? _veriKlasoru;
 
-        /// <summary>SQLite dosyalarının tutulacağı yazılabilir klasör.</summary>
+        /// <summary>Dışa aktarım (.xlsx / .csv) ve günlük dosyalarının tutulacağı yazılabilir klasör.</summary>
         public static string VeriKlasoru => _veriKlasoru ??= KlasoruBelirle();
 
-        /// <summary>Kurulumla birlikte gelen şifreli soru paketi (salt okunur kaynak).</summary>
-        public static string SorularPaketYolu =>
-            Path.Combine(AppContext.BaseDirectory, "Data", "Sorular.dat");
-
-        /// <summary>Geriye dönük uyumluluk: eski ad, şifreli paket yolunu döndürür.</summary>
-        public static string SorularJsonYolu => SorularPaketYolu;
-
-        public static string SorularVeritabaniYolu => Path.Combine(VeriKlasoru, "sorular.db");
-
-        public static string IlerlemeVeritabaniYolu => Path.Combine(VeriKlasoru, "ilerleme.db");
+        /// <summary>Uygulama yapılandırma dosyası (appsettings.json) yolu.</summary>
+        public static string AyarDosyasiYolu =>
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
         private static string KlasoruBelirle()
         {
@@ -36,7 +28,7 @@ namespace KademeliEgitimPlatformu.Services
 
             string yerelKok = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (string.IsNullOrWhiteSpace(yerelKok))
-                return uygulamaYani; // Son çare: eski davranış
+                return uygulamaYani;
 
             string yerel = Path.Combine(yerelKok, UygulamaAdi, "Data");
             Directory.CreateDirectory(yerel);

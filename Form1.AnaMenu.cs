@@ -44,12 +44,12 @@ namespace KademeliEgitimPlatformu
 
             Button btnUsbPaketYukle = new()
             {
-                Text = "📥 USB Paket Yükle (.json)",
+                Text = "📥 Soru İçe Aktar (.xlsx / .csv)",
                 Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.FromArgb(125, 211, 252),
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(245, 44),
+                Size = new Size(255, 44),
                 Dock = DockStyle.Right,
                 Cursor = Cursors.Hand
             };
@@ -58,7 +58,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblCevrimdisi = new()
             {
-                Text = "  ● %100 Çevrimdışı (SQLite Aktif)  ",
+                Text = "  ● Yerel PostgreSQL 18 Aktif  ",
                 Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(74, 222, 128),
                 BackColor = Color.FromArgb(20, 65, 40),
@@ -75,7 +75,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblAltBaslik = new()
             {
-                Text = $"Eğitim Modülleri   •   SQLite Soru Havuzu: {SoruDeposu.SoruSayisi()} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
+                Text = $"Eğitim Modülleri   •   PostgreSQL Soru Havuzu: {SoruDeposu.SoruSayisi()} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
@@ -94,8 +94,8 @@ namespace KademeliEgitimPlatformu
             modullerIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
 
             modullerIzgara.Controls.Add(ModulKartiOlustur("</>  Görsel Programlama", "Bileşen tanımları, form kontrolleri, olay (event) yönetimi ve asenkron iş parçacığı mimarisi.", _gorselBasari, _gorselAraSinavGecti, Color.FromArgb(20, 184, 166), DisiplinTuru.GorselProgramlama), 0, 0);
-            modullerIzgara.Controls.Add(ModulKartiOlustur("🗄️  Veri Tabanları", "Yerel SQLite mimarisi, tablo yapıları, ilişkisel sorgu tasarımı ve veri bütünlüğü.", _veriTabaniBasari, _veriTabaniAraSinavGecti, Color.FromArgb(245, 158, 11), DisiplinTuru.VeriTabanlari), 1, 0);
-            modullerIzgara.Controls.Add(ModulKartiOlustur("🛡️  Siber Güvenlik", "Güvenli kodlama ilkeleri, SHA-256 özetleme (hash), AES şifreleme, saldırı senaryoları ve zafiyet analizi.", _siberBasari, _siberAraSinavGecti, Color.FromArgb(236, 72, 153), DisiplinTuru.SiberGuvenlik), 2, 0);
+            modullerIzgara.Controls.Add(ModulKartiOlustur("🗄️  Veri Tabanları", "PostgreSQL 18 mimarisi, tablo yapıları, ilişkisel sorgu tasarımı ve veri bütünlüğü.", _veriTabaniBasari, _veriTabaniAraSinavGecti, Color.FromArgb(245, 158, 11), DisiplinTuru.VeriTabanlari), 1, 0);
+            modullerIzgara.Controls.Add(ModulKartiOlustur("🛡️  Siber Güvenlik", "Güvenli kodlama ilkeleri, BCrypt tuzlu parola özetleme, saldırı senaryoları ve zafiyet analizi.", _siberBasari, _siberAraSinavGecti, Color.FromArgb(236, 72, 153), DisiplinTuru.SiberGuvenlik), 2, 0);
 
             Label lblZorlukBaslik = new()
             {
@@ -131,19 +131,19 @@ namespace KademeliEgitimPlatformu
 
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
                 "Orta Mod (%75 Başarı Barajı)",
-                ortaAcik ? "✓ Kilidi Açık" : $"🔒 Ara Sınav {gecilenAraSinav}/3",
+                ortaAcik ? "✓ Kilidi Açık" : $"📝 Ara Sınav {gecilenAraSinav}/3",
                 ortaAcik
                     ? "Üç ara sınav tamamlandı. Orta Mod karma sınavına girebilirsiniz."
-                    : "Giriş için üç modülün ara sınavını da geçmeniz gerekir.",
+                    : "Kilidi açmak için tıklayarak Kolay -> Orta Seviye Geçiş Ara Sınavı'na (%70) girin.",
                 Color.FromArgb(245, 158, 11),
                 OrtaModuAc), 1, 0);
 
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
                 "Zor Mod (Simülatör)",
-                zorAcik ? "✓ Kilidi Açık" : "🔒 Orta Mod Gerekli",
+                zorAcik ? "✓ Kilidi Açık" : "📝 Geçiş Sınavı",
                 zorAcik
                     ? "Gizli syntax tuzakları, gerçek Roslyn derleyicisiyle denetlenir."
-                    : "Önce Orta Mod karma sınavını %75 ile geçin.",
+                    : "Kilidi açmak için tıklayarak Orta -> Zor Seviye Geçiş Ara Sınavı'na (%75) girin.",
                 Color.FromArgb(139, 92, 246),
                 ZorModuAc), 2, 0);
 
@@ -361,38 +361,74 @@ namespace KademeliEgitimPlatformu
             return p;
         }
 
-        /// <summary>Orta Mod, üç modülün ara sınavı da geçilince açılır.</summary>
+        /// <summary>
+        /// Orta Mod henüz açık değilse katı blokaj yerine Kolay -> Orta
+        /// "Seviye Geçiş Ara Sınavı"nı başlatmayı önerir.
+        /// </summary>
         private void OrtaModuAc()
         {
             IlerlemeDurumu durum = MevcutIlerleme();
             if (!KademeServisi.OrtaModAcikMi(durum))
             {
-                MessageBox.Show(
-                    "Orta Mod henüz kilitli.\n\n" +
-                    $"Ara sınav barajı: %{KademeServisi.AraSinavBaraji}\n" +
-                    $"Tamamlanan: {KademeServisi.GecilenAraSinavSayisi(durum)}/3\n\n" +
-                    KademeServisi.EksikAraSinavMetni(durum),
-                    "Kilitli Mod",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Information);
+                DialogResult secim = MessageBox.Show(
+                    "Orta Mod kilidini açmak için 'Kolay -> Orta Seviye Geçiş Ara Sınavı'nı " +
+                    $"(%{KademeServisi.AraSinavBaraji} başarı barajı) geçmeniz gerekir.\n\n" +
+                    $"Tamamlanan Modül Ara Sınavları: {KademeServisi.GecilenAraSinavSayisi(durum)}/3\n" +
+                    $"{KademeServisi.EksikAraSinavMetni(durum)}\n\n" +
+                    "Şimdi 'Kolay -> Orta Seviye Geçiş Ara Sınavı'nı başlatmak ister misiniz?",
+                    "Kolay -> Orta Seviye Geçiş Ara Sınavı",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (secim == DialogResult.Yes)
+                {
+                    SeviyeGecisAraSinaviniBaslat(ZorlukSeviyesi.Orta);
+                }
                 return;
             }
 
             SinaviBaslat(null, ZorlukSeviyesi.Orta, "Orta Mod — Karma Değerlendirme");
         }
 
-        /// <summary>Zor Mod, Orta Mod sınavı geçildikten sonra açılır.</summary>
+        /// <summary>
+        /// Zor Mod henüz açık değilse katı blokaj yerine önce eksik olan
+        /// Kolay -> Orta veya Orta -> Zor "Seviye Geçiş Ara Sınavı"nı başlatmayı önerir.
+        /// </summary>
         private void ZorModuAc()
         {
             IlerlemeDurumu durum = MevcutIlerleme();
             if (!KademeServisi.ZorModAcikMi(durum))
             {
-                string mesaj = !KademeServisi.OrtaModAcikMi(durum)
-                    ? "Zor Mod henüz kilitli.\n\nÖnce üç modülün ara sınavını geçin:\n" +
-                      KademeServisi.EksikAraSinavMetni(durum)
-                    : "Zor Mod henüz kilitli.\n\nOrta Mod karma sınavını en az %75 başarıyla geçmeniz gerekiyor.";
+                if (!KademeServisi.OrtaModAcikMi(durum))
+                {
+                    DialogResult ilkSecim = MessageBox.Show(
+                        "Zor Mod'a geçebilmek için önce Orta Mod kilidini açmanız gerekir.\n\n" +
+                        $"{KademeServisi.EksikAraSinavMetni(durum)}\n\n" +
+                        "Şimdi 'Kolay -> Orta Seviye Geçiş Ara Sınavı'nı başlatmak ister misiniz?",
+                        "Kolay -> Orta Seviye Geçiş Ara Sınavı",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
 
-                MessageBox.Show(mesaj, "Kilitli Mod", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                    if (ilkSecim == DialogResult.Yes)
+                    {
+                        SeviyeGecisAraSinaviniBaslat(ZorlukSeviyesi.Orta);
+                    }
+                    return;
+                }
+
+                DialogResult ortaZorSecim = MessageBox.Show(
+                    "Zor Mod (Gömülü Kod Simülatörü) kilidini açmak için " +
+                    $"'Orta -> Zor Seviye Geçiş Ara Sınavı'nı en az %{KademeServisi.OrtaModBaraji} " +
+                    "başarıyla geçmeniz gerekir.\n\n" +
+                    "Şimdi 'Orta -> Zor Seviye Geçiş Ara Sınavı'nı başlatmak ister misiniz?",
+                    "Orta -> Zor Seviye Geçiş Ara Sınavı",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question);
+
+                if (ortaZorSecim == DialogResult.Yes)
+                {
+                    SeviyeGecisAraSinaviniBaslat(ZorlukSeviyesi.Zor);
+                }
                 return;
             }
 
@@ -403,8 +439,8 @@ namespace KademeliEgitimPlatformu
         {
             using OpenFileDialog ofd = new()
             {
-                Title = "Çevrimdışı Soru Paketi Seçin (.json veya .dat)",
-                Filter = "Soru Paketi (*.json;*.dat)|*.json;*.dat|JSON Soru Paketi (*.json)|*.json|Şifreli Paket (*.dat)|*.dat"
+                Title = "Soru Dosyası Seçin (.xlsx veya .csv)",
+                Filter = "Soru Dosyası (*.xlsx;*.csv)|*.xlsx;*.csv|Excel Dosyası (*.xlsx)|*.xlsx|CSV Dosyası (*.csv)|*.csv"
             };
 
             if (ofd.ShowDialog() != DialogResult.OK)
@@ -418,8 +454,8 @@ namespace KademeliEgitimPlatformu
                     : "";
 
                 MessageBox.Show(
-                    $"Paket SQLite veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
-                    "Çevrimdışı Paket Yükleme Başarılı",
+                    $"Sorular PostgreSQL veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
+                    "Soru İçe Aktarma Başarılı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
                 AnaMenuyuCiz();

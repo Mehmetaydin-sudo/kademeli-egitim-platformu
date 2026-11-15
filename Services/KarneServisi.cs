@@ -1,97 +1,82 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
+using System.Linq;
 using System.Text;
 using KademeliEgitimPlatformu.Models;
-using Microsoft.Data.Sqlite;
+using Npgsql;
 
 namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
-    /// Yanlış cevaplanan soruları yerel SQLite veritabanında (ilerleme.db) saklar.
+    /// Yanlış cevaplanan soruları yerel PostgreSQL 18 (kademeli_egitim) veritabanındaki
+    /// 'yanlis_cevaplar' tablosunda saklar.
     /// Böylece hata karnesi yalnızca son oturumu değil, geçmişi de gösterebilir.
-    /// Tablo: YanlisCevaplar(Id, Tarih, Disiplin, Zorluk, Baslik, SecilenCevap, DogruCevap, Aciklama)
     /// </summary>
     public class KarneServisi
     {
         /// <summary>Veritabanında tutulacak en fazla kayıt sayısı (eskiler silinir).</summary>
         public const int MaksKayitSayisi = 300;
 
-        private readonly string _baglantiMetni;
+        private readonly string? _baglantiMetni;
+        private readonly int? _kullaniciId;
 
-        public KarneServisi(string? dosyaYolu = null)
+        public KarneServisi(string? ozelBaglantiDizesi = null, int? kullaniciId = null)
         {
-            dosyaYolu ??= VeriYolu.IlerlemeVeritabaniYolu;
-            Directory.CreateDirectory(Path.GetDirectoryName(dosyaYolu)!);
-
-            _baglantiMetni = new SqliteConnectionStringBuilder { DataSource = dosyaYolu }.ToString();
-            TabloyuHazirla();
+            _baglantiMetni = ozelBaglantiDizesi;
+            _kullaniciId = kullaniciId;
+            VeritabaniBaglantisi.TablolariHazirla(_baglantiMetni);
         }
 
-        private void TabloyuHazirla()
-        {
-            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
-            SqliteYardimcisi.WalEtkinlestir(baglanti);
-
-            using var komut = baglanti.CreateCommand();
-            komut.CommandText =
-                "CREATE TABLE IF NOT EXISTS YanlisCevaplar (" +
-                "  Id            INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "  Tarih         TEXT    NOT NULL," +
-                "  Disiplin      INTEGER NOT NULL," +
-                "  Zorluk        INTEGER NOT NULL," +
-                "  Baslik        TEXT    NOT NULL," +
-                "  SecilenCevap  TEXT    NOT NULL," +
-                "  DogruCevap    TEXT    NOT NULL," +
-                "  Aciklama      TEXT    NOT NULL);";
-            komut.ExecuteNonQuery();
-        }
-
-        /// <summary>Yanlış cevapları tek bir transaction içinde kaydeder ve eski kayıtları budar.</summary>
+        /// <summary>Yanlış cevapları tek bir PostgreSQL transaction içinde kaydeder ve eski kayıtları budar.</summary>
         public void Kaydet(IEnumerable<YanlisKaydi> kayitlar)
         {
             ArgumentNullException.ThrowIfNull(kayitlar);
 
-            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
             using var islem = baglanti.BeginTransaction();
 
-            using (var komut = baglanti.CreateCommand())
+            const string ekleSql = @"
+                INSERT INTO yanlis_cevaplar (
+                    kullanici_id, tarih, disiplin, zorluk,
+                    baslik, secilen_cevap, dogru_cevap, aciklama
+                ) VALUES (
+                    @kullanici_id, @tarih, @disiplin, @zorluk,
+                    @baslik, @secilen, @dogru, @aciklama
+                );";
+
+            foreach (YanlisKaydi kayit in kayitlar)
             {
-                komut.Transaction = islem;
-                komut.CommandText =
-                    "INSERT INTO YanlisCevaplar (Tarih, Disiplin, Zorluk, Baslik, SecilenCevap, DogruCevap, Aciklama) " +
-                    "VALUES ($tarih, $disiplin, $zorluk, $baslik, $secilen, $dogru, $aciklama);";
-
-                var tarihParam = komut.Parameters.Add("$tarih", SqliteType.Text);
-                var disiplinParam = komut.Parameters.Add("$disiplin", SqliteType.Integer);
-                var zorlukParam = komut.Parameters.Add("$zorluk", SqliteType.Integer);
-                var baslikParam = komut.Parameters.Add("$baslik", SqliteType.Text);
-                var secilenParam = komut.Parameters.Add("$secilen", SqliteType.Text);
-                var dogruParam = komut.Parameters.Add("$dogru", SqliteType.Text);
-                var aciklamaParam = komut.Parameters.Add("$aciklama", SqliteType.Text);
-
-                foreach (YanlisKaydi kayit in kayitlar)
-                {
-                    tarihParam.Value = kayit.Tarih.ToString("O", CultureInfo.InvariantCulture);
-                    disiplinParam.Value = (int)kayit.Disiplin;
-                    zorlukParam.Value = (int)kayit.Zorluk;
-                    baslikParam.Value = kayit.Baslik;
-                    secilenParam.Value = kayit.SecilenCevap;
-                    dogruParam.Value = kayit.DogruCevap;
-                    aciklamaParam.Value = kayit.Aciklama;
-                    komut.ExecuteNonQuery();
-                }
+                using var komut = new NpgsqlCommand(ekleSql, baglanti, islem);
+                komut.Parameters.AddWithValue("@kullanici_id", (object?)_kullaniciId ?? DBNull.Value);
+                komut.Parameters.AddWithValue("@tarih", kayit.Tarih.ToUniversalTime());
+                komut.Parameters.AddWithValue("@disiplin", (short)kayit.Disiplin);
+                komut.Parameters.AddWithValue("@zorluk", (short)kayit.Zorluk);
+                komut.Parameters.AddWithValue("@baslik", kayit.Baslik);
+                komut.Parameters.AddWithValue("@secilen", kayit.SecilenCevap);
+                komut.Parameters.AddWithValue("@dogru", kayit.DogruCevap);
+                komut.Parameters.AddWithValue("@aciklama", kayit.Aciklama);
+                komut.ExecuteNonQuery();
             }
 
             // Sınırsız büyümeyi engelle: yalnızca en yeni MaksKayitSayisi kaydı tut.
-            using (var budama = baglanti.CreateCommand())
+            const string budamaSql = @"
+                DELETE FROM yanlis_cevaplar
+                WHERE (@kullanici_id IS NULL AND kullanici_id IS NULL OR kullanici_id = @kullanici_id)
+                  AND id NOT IN (
+                      SELECT id FROM yanlis_cevaplar
+                      WHERE (@kullanici_id IS NULL AND kullanici_id IS NULL OR kullanici_id = @kullanici_id)
+                      ORDER BY id DESC
+                      LIMIT @maks
+                  );";
+
+            using (var budama = new NpgsqlCommand(budamaSql, baglanti, islem))
             {
-                budama.Transaction = islem;
-                budama.CommandText =
-                    "DELETE FROM YanlisCevaplar WHERE Id NOT IN (" +
-                    "  SELECT Id FROM YanlisCevaplar ORDER BY Id DESC LIMIT $maks);";
-                budama.Parameters.AddWithValue("$maks", MaksKayitSayisi);
+                var kullaniciParam = new NpgsqlParameter("@kullanici_id", NpgsqlTypes.NpgsqlDbType.Integer)
+                {
+                    Value = (object?)_kullaniciId ?? DBNull.Value
+                };
+                budama.Parameters.Add(kullaniciParam);
+                budama.Parameters.AddWithValue("@maks", MaksKayitSayisi);
                 budama.ExecuteNonQuery();
             }
 
@@ -104,26 +89,32 @@ namespace KademeliEgitimPlatformu.Services
             int sinir = Math.Clamp(adet, 1, MaksKayitSayisi);
             var sonuc = new List<YanlisKaydi>();
 
-            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
 
-            using var komut = baglanti.CreateCommand();
-            komut.CommandText =
-                "SELECT Tarih, Disiplin, Zorluk, Baslik, SecilenCevap, DogruCevap, Aciklama " +
-                "FROM YanlisCevaplar ORDER BY Id DESC LIMIT $adet;";
-            komut.Parameters.AddWithValue("$adet", sinir);
+            const string sql = @"
+                SELECT tarih, disiplin, zorluk, baslik, secilen_cevap, dogru_cevap, aciklama
+                FROM yanlis_cevaplar
+                WHERE (@kullanici_id IS NULL AND kullanici_id IS NULL OR kullanici_id = @kullanici_id)
+                ORDER BY id DESC
+                LIMIT @adet;";
+
+            using var komut = new NpgsqlCommand(sql, baglanti);
+            var kullaniciParam = new NpgsqlParameter("@kullanici_id", NpgsqlTypes.NpgsqlDbType.Integer)
+            {
+                Value = (object?)_kullaniciId ?? DBNull.Value
+            };
+            komut.Parameters.Add(kullaniciParam);
+            komut.Parameters.AddWithValue("@adet", sinir);
 
             using var okuyucu = komut.ExecuteReader();
             while (okuyucu.Read())
             {
-                DateTime tarih = DateTime.TryParse(
-                    okuyucu.GetString(0), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var t)
-                    ? t
-                    : DateTime.MinValue;
+                DateTime tarih = okuyucu.GetDateTime(0).ToLocalTime();
 
                 sonuc.Add(new YanlisKaydi(
                     tarih,
-                    (DisiplinTuru)okuyucu.GetInt32(1),
-                    (ZorlukSeviyesi)okuyucu.GetInt32(2),
+                    (DisiplinTuru)okuyucu.GetInt16(1),
+                    (ZorlukSeviyesi)okuyucu.GetInt16(2),
                     okuyucu.GetString(3),
                     okuyucu.GetString(4),
                     okuyucu.GetString(5),
@@ -133,12 +124,20 @@ namespace KademeliEgitimPlatformu.Services
             return sonuc;
         }
 
-        /// <summary>Tüm yanlış cevap kayıtlarını siler.</summary>
+        /// <summary>Yanlış cevap kayıtlarını siler.</summary>
         public void Temizle()
         {
-            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
-            using var komut = baglanti.CreateCommand();
-            komut.CommandText = "DELETE FROM YanlisCevaplar;";
+            using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+            const string sql = @"
+                DELETE FROM yanlis_cevaplar
+                WHERE (@kullanici_id IS NULL AND kullanici_id IS NULL OR kullanici_id = @kullanici_id);";
+
+            using var komut = new NpgsqlCommand(sql, baglanti);
+            var kullaniciParam = new NpgsqlParameter("@kullanici_id", NpgsqlTypes.NpgsqlDbType.Integer)
+            {
+                Value = (object?)_kullaniciId ?? DBNull.Value
+            };
+            komut.Parameters.Add(kullaniciParam);
             komut.ExecuteNonQuery();
         }
     }
@@ -160,7 +159,7 @@ namespace KademeliEgitimPlatformu.Services
             var sb = new StringBuilder();
 
             sb.AppendLine("=== KADEMELİ BİLİŞİM VE SİBER GÜVENLİK EĞİTİM PLATFORMU ===");
-            sb.AppendLine("Çevrimdışı Hata Karnesi");
+            sb.AppendLine("Hata Karnesi Raporu");
             sb.AppendLine($"Rapor Tarihi : {tarih:dd.MM.yyyy HH:mm}");
             if (!string.IsNullOrWhiteSpace(surum))
                 sb.AppendLine($"Sürüm        : {surum}");
@@ -203,7 +202,7 @@ namespace KademeliEgitimPlatformu.Services
 
             sb.AppendLine();
             sb.AppendLine("---");
-            sb.AppendLine("Bu rapor %100 çevrimdışı, yerel SQLite verilerinden üretilmiştir.");
+            sb.AppendLine("Bu rapor yerel PostgreSQL 18 (kademeli_egitim) verilerinden üretilmiştir.");
             return sb.ToString();
         }
     }

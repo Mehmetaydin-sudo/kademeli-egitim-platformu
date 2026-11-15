@@ -276,7 +276,7 @@ namespace KademeliEgitimPlatformu
             {
                 MessageBox.Show(
                     "Bu modül için henüz ara sınav sorusu bulunamadı.\n\n" +
-                    "Soru havuzunu Data/Sorular.json içinde genişletebilir veya USB paket yükleyebilirsiniz.",
+                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
                     "Ara Sınav Bulunamadı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -288,6 +288,38 @@ namespace KademeliEgitimPlatformu
             _aktifZorluk = null;
 
             SinaviBaslatInternal(sorular, $"{disiplin} — Ara Sınav", disiplin, null);
+        }
+
+        /// <summary>
+        /// Kolay -> Orta veya Orta -> Zor "Seviye Geçiş Ara Sınavı"nı başlatır.
+        /// Sınav sonucu PostgreSQL 'seviye_gecis_sinavlari' tablosuna kaydedilir;
+        /// baraj geçildiğinde ilgili üst zorluk seviyesinin kilidi kalıcı olarak açılır.
+        /// </summary>
+        private void SeviyeGecisAraSinaviniBaslat(ZorlukSeviyesi hedefZorluk)
+        {
+            List<Soru> sorular = SoruDeposu.SeviyeGecisSorulariniGetir(hedefZorluk);
+            if (sorular.Count == 0)
+            {
+                MessageBox.Show(
+                    "Seviye geçiş ara sınavı için soru bulunamadı.\n\n" +
+                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
+                    "Ara Sınav Bulunamadı",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            _aktifSinavTuru = hedefZorluk == ZorlukSeviyesi.Orta
+                ? SinavTuru.KolayOrtaGecisSinavi
+                : SinavTuru.OrtaZorGecisSinavi;
+            _aktifSinavDisiplini = null;
+            _aktifZorluk = hedefZorluk;
+
+            string baslik = hedefZorluk == ZorlukSeviyesi.Orta
+                ? "Seviye Geçiş Ara Sınavı (Kolay -> Orta)"
+                : "Seviye Geçiş Ara Sınavı (Orta -> Zor)";
+
+            SinaviBaslatInternal(sorular, baslik, null, hedefZorluk);
         }
 
         private void SinaviBaslatInternal(
@@ -304,7 +336,7 @@ namespace KademeliEgitimPlatformu
                     "Bu seçimde henüz soru bulunamadı.\n\n" +
                     $"Disiplin: {(disiplin?.ToString() ?? "Tümü")}\n" +
                     $"Zorluk: {(zorluk?.ToString() ?? "Tümü")}\n\n" +
-                    "Soru havuzunu Data/Sorular.json ile genişletebilir veya USB paket yükleyebilirsiniz.",
+                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
                     "Soru Bulunamadı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -488,7 +520,7 @@ namespace KademeliEgitimPlatformu
             _ipucuJetonu--;
             _lblJetonSayaci.Text = $"🔑 İpucu Jetonu: {_ipucuJetonu}   ";
             _btnIpucuKullan.Enabled = false;
-            KaliciIlerlemeyiKaydet(); // Jeton harcandığında SQLite'a kaydet
+            KaliciIlerlemeyiKaydet(); // Jeton harcandığında PostgreSQL'e kaydet
         }
 
         private void SonrakiSoru_Click(object? sender, EventArgs e)
@@ -516,6 +548,16 @@ namespace KademeliEgitimPlatformu
                 if (araSinavGecti)
                     AraSinaviGectiOlarakIsaretle(_aktifSinavDisiplini);
 
+                SeviyeGecisSinaviniVeritabaninaKaydet(
+                    "ModulAraSinav",
+                    _aktifSinavDisiplini,
+                    ZorlukSeviyesi.Orta,
+                    toplam,
+                    dogru,
+                    basariYuzdesi,
+                    KademeServisi.AraSinavBaraji,
+                    araSinavGecti);
+
                 KaliciIlerlemeyiKaydet();
 
                 IlerlemeDurumu durum = MevcutIlerleme();
@@ -524,7 +566,7 @@ namespace KademeliEgitimPlatformu
                 string sonucMesaji = araSinavGecti
                     ? $"🎉 Ara sınavı geçtiniz! ({gecilen}/3 tamamlandı)\n" +
                       (KademeServisi.OrtaModAcikMi(durum)
-                          ? "Orta Mod kilidi açıldı."
+                          ? "Orta Mod kilidi kalıcı olarak açıldı."
                           : KademeServisi.EksikAraSinavMetni(durum))
                     : $"⚠️ Ara sınav barajı %{KademeServisi.AraSinavBaraji}. Tekrar deneyebilirsiniz.\n" +
                       KademeServisi.EksikAraSinavMetni(durum);
@@ -535,6 +577,93 @@ namespace KademeliEgitimPlatformu
                     $"Geçen Süre: {sure:mm\\:ss}\n" +
                     $"Başarı Yüzdesi: %{basariYuzdesi}\n\n{sonucMesaji}",
                     "Ara Sınav Sonucu",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                EkranDegistir("ANA");
+                return;
+            }
+
+            if (_aktifSinavTuru == SinavTuru.KolayOrtaGecisSinavi)
+            {
+                bool gecisBasarili = KademeServisi.AraSinavGectiMi(dogru, toplam);
+                if (gecisBasarili)
+                {
+                    _gorselAraSinavGecti = true;
+                    _veriTabaniAraSinavGecti = true;
+                    _siberAraSinavGecti = true;
+                    _ipucuJetonu++;
+                }
+
+                SeviyeGecisSinaviniVeritabaninaKaydet(
+                    "KolaydanOrtaya",
+                    null,
+                    ZorlukSeviyesi.Orta,
+                    toplam,
+                    dogru,
+                    basariYuzdesi,
+                    KademeServisi.AraSinavBaraji,
+                    gecisBasarili);
+
+                KaliciIlerlemeyiKaydet();
+
+                string mesaj = gecisBasarili
+                    ? "🎉 TEBRİKLER! Kolay -> Orta Seviye Geçiş Ara Sınavı'nı başarıyla geçtiniz!\n" +
+                      "Orta Mod kilidi kalıcı olarak açıldı ve +1 İpucu Jetonu kazandınız."
+                    : $"⚠️ Seviye geçiş barajı %{KademeServisi.AraSinavBaraji}. Orta Mod kilidi açılmadı; " +
+                      "yanlış açıklamalarını inceleyip tekrar deneyebilirsiniz.";
+
+                MessageBox.Show(
+                    $"Kolay -> Orta Seviye Geçiş Ara Sınavı Tamamlandı!\n\n" +
+                    $"Doğru Sayısı: {dogru} / {toplam}\n" +
+                    $"Geçen Süre: {sure:mm\\:ss}\n" +
+                    $"Başarı Yüzdesi: %{basariYuzdesi}\n\n{mesaj}",
+                    "Seviye Geçiş Ara Sınavı Sonucu",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                EkranDegistir("ANA");
+                return;
+            }
+
+            if (_aktifSinavTuru == SinavTuru.OrtaZorGecisSinavi)
+            {
+                bool gecisBasarili = KademeServisi.OrtaModGectiMi(dogru, toplam);
+                var gecisSonuclari = PuanlamaServisi.DisiplinBazindaHesapla(_aktifSorular, _cevaplar);
+                IlerlemeDurumu birlesik = PuanlamaServisi.Birlestir(MevcutIlerleme(), gecisSonuclari, gecisBasarili ? 1 : 0);
+
+                _gorselBasari = birlesik.GorselBasari;
+                _veriTabaniBasari = birlesik.VeriTabaniBasari;
+                _siberBasari = birlesik.SiberBasari;
+                _ipucuJetonu = birlesik.IpucuJetonu;
+
+                if (gecisBasarili)
+                    _ortaModGecti = true;
+
+                SeviyeGecisSinaviniVeritabaninaKaydet(
+                    "OrtadanZora",
+                    null,
+                    ZorlukSeviyesi.Zor,
+                    toplam,
+                    dogru,
+                    basariYuzdesi,
+                    KademeServisi.OrtaModBaraji,
+                    gecisBasarili);
+
+                KaliciIlerlemeyiKaydet();
+
+                string mesaj = gecisBasarili
+                    ? "🎉 TEBRİKLER! Orta -> Zor Seviye Geçiş Ara Sınavı'nı başarıyla geçtiniz!\n" +
+                      "Zor Mod (Gömülü Kod Simülatörü) kilidi kalıcı olarak açıldı ve +1 İpucu Jetonu kazandınız."
+                    : $"⚠️ Seviye geçiş barajı %{KademeServisi.OrtaModBaraji}. Zor Mod kilidi açılmadı; " +
+                      "yanlış açıklamalarını inceleyip tekrar deneyebilirsiniz.";
+
+                MessageBox.Show(
+                    $"Orta -> Zor Seviye Geçiş Ara Sınavı Tamamlandı!\n\n" +
+                    $"Doğru Sayısı: {dogru} / {toplam}\n" +
+                    $"Geçen Süre: {sure:mm\\:ss}\n" +
+                    $"Başarı Yüzdesi: %{basariYuzdesi}\n\n{mesaj}",
+                    "Seviye Geçiş Ara Sınavı Sonucu",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
 
@@ -556,6 +685,16 @@ namespace KademeliEgitimPlatformu
             // Orta Mod sınavı %75 ile geçilirse Zor Mod kilidi açılır.
             if (_aktifZorluk == ZorlukSeviyesi.Orta && barajGecti)
                 _ortaModGecti = true;
+
+            SeviyeGecisSinaviniVeritabaninaKaydet(
+                _aktifZorluk == ZorlukSeviyesi.Orta ? "OrtadanZora" : "NormalSinav",
+                _aktifSinavDisiplini,
+                _aktifZorluk ?? ZorlukSeviyesi.Kolay,
+                toplam,
+                dogru,
+                basariYuzdesi,
+                KademeServisi.OrtaModBaraji,
+                barajGecti);
 
             KaliciIlerlemeyiKaydet();
 
@@ -593,6 +732,39 @@ namespace KademeliEgitimPlatformu
             catch (Exception)
             {
                 // Karne yazılamasa bile ilerleme ve sınav sonucu korunur.
+            }
+        }
+
+        /// <summary>
+        /// Sınav veya Seviye Geçiş Ara Sınavı sonucunu PostgreSQL 'seviye_gecis_sinavlari' tablosuna kaydeder.
+        /// </summary>
+        private void SeviyeGecisSinaviniVeritabaninaKaydet(
+            string gecisTuru,
+            DisiplinTuru? disiplin,
+            ZorlukSeviyesi hedefZorluk,
+            int toplamSoru,
+            int dogruSayisi,
+            int basariYuzdesi,
+            int barajYuzdesi,
+            bool basariliMi)
+        {
+            try
+            {
+                IlerlemeDeposu.SeviyeGecisSinaviKaydet(new SeviyeGecisSinavKaydi(
+                    gecisTuru,
+                    disiplin,
+                    hedefZorluk,
+                    toplamSoru,
+                    dogruSayisi,
+                    basariYuzdesi,
+                    barajYuzdesi,
+                    basariliMi,
+                    Math.Max(0, _gecenSaniye),
+                    DateTime.UtcNow));
+            }
+            catch (Exception)
+            {
+                // Geçmiş tablosu kaydı başarısız olsa bile sınav akışı kesilmez.
             }
         }
 

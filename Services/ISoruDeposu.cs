@@ -4,9 +4,7 @@ using KademeliEgitimPlatformu.Models;
 namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
-    /// Soru havuzunun veri erişim sözleşmesi. Bugün SQLite kullanılıyor;
-    /// ileride merkezi bir sunucuya (ör. PostgreSQL) geçilirse yalnızca bu
-    /// arayüzün yeni uygulaması yazılır, arayüz kodu değişmez.
+    /// Soru havuzunun veri erişim sözleşmesi (PostgreSQL 18 / Npgsql).
     /// </summary>
     public interface ISoruDeposu
     {
@@ -20,6 +18,9 @@ namespace KademeliEgitimPlatformu.Services
 
         /// <summary>Belirtilen modülün ara sınav sorularını getirir.</summary>
         List<Soru> AraSinavSorulariniGetir(DisiplinTuru disiplin);
+
+        /// <summary>Kolay -> Orta veya Orta -> Zor seviye geçiş ara sınavı sorularını getirir.</summary>
+        List<Soru> SeviyeGecisSorulariniGetir(ZorlukSeviyesi hedefZorluk);
 
         int DisaridanPaketYukle(string secilenDosyaYolu);
     }
