@@ -1,4 +1,4 @@
-using System.Text;
+using System;
 using KademeliEgitimPlatformu.Services;
 using Xunit;
 
@@ -7,62 +7,47 @@ namespace KademeliEgitimPlatformu.Tests
     public class SoruKoruyucuTests
     {
         [Fact]
-        public void PaketSifrele_ve_Coz_AyniVeriyiKorur()
+        public void Ozetle_ve_Dogrula_BcryptIleCalisir()
         {
-            byte[] duzVeri = Encoding.UTF8.GetBytes("Şıklar ve doğru cevap burada.");
+            const string parola = "GucluParola!2026";
 
-            byte[] paket = SoruKoruyucu.PaketSifrele(duzVeri);
-            byte[] cozulen = SoruKoruyucu.PaketCoz(paket);
+            string ozet = SoruKoruyucu.Ozetle(parola);
 
-            Assert.Equal(duzVeri, cozulen);
-            Assert.True(SoruKoruyucu.PaketMi(paket));
+            Assert.True(SoruKoruyucu.BcryptOzetiMi(ozet));
+            Assert.True(SoruKoruyucu.Dogrula(parola, ozet));
+            Assert.False(SoruKoruyucu.Dogrula("YanlisParola", ozet));
         }
 
         [Fact]
-        public void Paket_DuzMetinSoruIcermez()
+        public void Ozetle_AyniParolaIcinFarkliTuzUretir()
         {
-            const string gizliMetin = "Bu sorunun cevabı kesinlikle gizli olmalı.";
-            byte[] paket = SoruKoruyucu.PaketSifrele(Encoding.UTF8.GetBytes(gizliMetin));
+            const string parola = "AyniParola123";
 
-            string paketMetni = Encoding.UTF8.GetString(paket);
+            string birinci = SoruKoruyucu.Ozetle(parola);
+            string ikinci = SoruKoruyucu.Ozetle(parola);
 
-            Assert.DoesNotContain(gizliMetin, paketMetni);
-            Assert.StartsWith("KEP1", paketMetni);
+            Assert.NotEqual(birinci, ikinci);
+            Assert.True(SoruKoruyucu.Dogrula(parola, birinci));
+            Assert.True(SoruKoruyucu.Dogrula(parola, ikinci));
         }
 
         [Fact]
-        public void MetinSifrele_ve_Coz_AyniMetniKorur()
+        public void KullaniciServisi_ParolaOzetle_ve_Dogrula()
         {
-            const string metin = "Türkçe karakterler: ığüşöçİĞÜŞÖÇ";
+            const string parola = "OgrenciSifre#42";
 
-            string sifreli = SoruKoruyucu.MetinSifrele(metin);
-            string cozulen = SoruKoruyucu.MetinCoz(sifreli);
+            string hash = KullaniciServisi.ParolaOzetle(parola);
 
-            Assert.NotEqual(metin, sifreli);
-            Assert.StartsWith("KEP1:", sifreli);
-            Assert.Equal(metin, cozulen);
+            Assert.True(SoruKoruyucu.BcryptOzetiMi(hash));
+            Assert.True(KullaniciServisi.ParolaDogrula(parola, hash));
+            Assert.False(KullaniciServisi.ParolaDogrula("HataliSifre", hash));
         }
 
         [Fact]
-        public void EskiDuzMetin_MetinCoz_AynenDoner()
+        public void BosParola_OzetlenirkenHataFirlatir()
         {
-            const string eskiKayit = "{\"Baslik\":\"v0.6 düz metin kaydı\"}";
-
-            Assert.Equal(eskiKayit, SoruKoruyucu.MetinCoz(eskiKayit));
-            Assert.False(SoruKoruyucu.SifreliMi(eskiKayit));
-        }
-
-        [Fact]
-        public void BaslikOzeti_AyniBasliktaAyni_FarkliBasliktaFarkli()
-        {
-            string birinci = SoruKoruyucu.BaslikOzeti("Aynı soru başlığı");
-            string ikinci = SoruKoruyucu.BaslikOzeti("Aynı soru başlığı");
-            string farkli = SoruKoruyucu.BaslikOzeti("Farklı soru başlığı");
-
-            Assert.Equal(birinci, ikinci);
-            Assert.NotEqual(birinci, farkli);
-            Assert.True(SoruKoruyucu.OzetMi(birinci));
-            Assert.False(SoruKoruyucu.OzetMi("düz başlık"));
+            Assert.Throws<ArgumentException>(() => SoruKoruyucu.Ozetle("   "));
+            Assert.Throws<ArgumentException>(() => KullaniciServisi.ParolaOzetle(""));
         }
     }
 }

@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.7.0";
+        private const string Surum = "v0.8.0";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
@@ -51,7 +51,7 @@ namespace KademeliEgitimPlatformu
         private DisiplinTuru? _aktifSinavDisiplini;
         private ZorlukSeviyesi? _aktifZorluk;
 
-        // SQLite (ilerleme.db) üzerinden yüklenen kalıcı kullanıcı verileri
+        // PostgreSQL 18 (kademeli_egitim) üzerinden yüklenen kalıcı kullanıcı verileri
         // Yeni kullanıcı, kazanmadığı bir başarı yüzdesiyle başlamaz (hepsi 0).
         private int _ipucuJetonu = 3;
         private int _gorselBasari = 0;
@@ -100,7 +100,7 @@ namespace KademeliEgitimPlatformu
             this.DoubleBuffered = true;
             this.KeyPreview = true;
 
-            // Açılışta SQLite ilerleme.db'den kayıtlı verileri yükle
+            // Açılışta PostgreSQL (kademeli_egitim) üzerinden kayıtlı verileri yükle
             KaliciIlerlemeyiYukle();
 
             _sinavTimer.Interval = 1000;
@@ -221,7 +221,7 @@ namespace KademeliEgitimPlatformu
         private void ArayuzuOlustur()
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = $"Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — {Surum} (SQLite + Roslyn)";
+            this.Text = $"Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — {Surum} (PostgreSQL 18 + Roslyn)";
             // 1366x768 gibi düşük çözünürlüklü ekranlarda da pencere ekrana sığar.
             this.Size = new Size(1280, 800);
             this.MinimumSize = new Size(1024, 700);
@@ -260,7 +260,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblLogo = new()
             {
-                Text = "⚡ EDUSEC\n    SQLITE + ROSLYN",
+                Text = "⚡ EDUSEC\n    POSTGRESQL + ROSLYN",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(56, 189, 248),
                 Dock = DockStyle.Top,
@@ -273,7 +273,7 @@ namespace KademeliEgitimPlatformu
 
             Label lblAltBilgi = new()
             {
-                Text = $"{Surum} • %100 Çevrimdışı\nsorular.db & ilerleme.db\n\nMehmet • Ünal\nİsmail Can • Yağız",
+                Text = $"{Surum} • PostgreSQL 18\nkademeli_egitim • BCrypt\n\nMehmet • Ünal\nİsmail Can • Yağız",
                 Font = FontOnbellegi.Al("Segoe UI", 8.5f),
                 ForeColor = Color.FromArgb(100, 116, 139),
                 Dock = DockStyle.Bottom,
@@ -309,24 +309,12 @@ namespace KademeliEgitimPlatformu
         }
 
         /// <summary>
-        /// Zor Mod (kod simülatörü) yalnızca Orta Mod sınavı geçildikten sonra açılır.
-        /// Kilit, yalnızca görsel değildir; bu giriş noktası da kontrol eder.
+        /// Zor Mod (kod simülatörü) yalnızca Orta -> Zor Seviye Geçiş Ara Sınavı geçildikten sonra açılır.
+        /// Kilitli olduğunda katı engel yerine ilgili Seviye Geçiş Ara Sınavı'nı başlatmayı önerir.
         /// </summary>
         private void SimulatoruAc()
         {
-            IlerlemeDurumu durum = MevcutIlerleme();
-            if (!KademeServisi.ZorModAcikMi(durum))
-            {
-                string mesaj = !KademeServisi.OrtaModAcikMi(durum)
-                    ? "Zor Mod henüz kilitli.\n\nÖnce üç modülün ara sınavını geçin:\n" +
-                      KademeServisi.EksikAraSinavMetni(durum)
-                    : "Zor Mod henüz kilitli.\n\nOrta Mod karma sınavını en az %75 başarıyla geçmeniz gerekiyor.";
-
-                MessageBox.Show(mesaj, "Kilitli Mod", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                return;
-            }
-
-            EkranDegistir("SIM");
+            ZorModuAc();
         }
 
         private void EkranDegistir(string ekranKodu)

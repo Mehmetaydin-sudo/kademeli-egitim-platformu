@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.7.0</Version>
+    <Version>0.8.0</Version>
     <AssemblyName>KademeliEgitimPlatformu</AssemblyName>
     <RootNamespace>KademeliEgitimPlatformu</RootNamespace>
   </PropertyGroup>
@@ -22,16 +22,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Öğrenci bilgisayarlarına düz metin soru dosyası kopyalanmaz.
-         Yayın çıktısında yalnızca AES-256-GCM ile şifrelenmiş Sorular.dat bulunur. -->
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-    <None Update="Data\Sorular.dat">
+    <None Update="appsettings.example.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="Data\Sorular.json">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
@@ -39,7 +34,6 @@
     <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
     <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
     <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
