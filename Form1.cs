@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.8.0";
+        private const string Surum = "v0.8.1";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.

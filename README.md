@@ -63,7 +63,7 @@ dotnet build
 dotnet run
 ```
 
-İlk açılışta `sorular` tablosu boşsa uygulama 18 soruluk varsayılan eğitim ve ara sınav havuzunu otomatik olarak PostgreSQL veritabanına tohumlar.
+İlk açılışta `sorular` tablosu boşsa uygulama `Kolay`, `Orta` ve `Zor` seviyelerini kapsayan 23 soruluk varsayılan eğitim ve ara sınav havuzunu otomatik olarak PostgreSQL veritabanına tohumlar.
 
 ---
 
@@ -149,6 +149,12 @@ dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.cs
 ---
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+
+### [v0.8.1] — 2026-11-15
+* **[Dağıtım & İzin Güvenliği (`Program Files`)]** `Directory.GetCurrentDirectory()` kullanımları tamamen kaldırıldı; `appsettings.json`, `appsettings.example.json` ve `database/schema.sql` gibi salt-okunur dosyalar `AppContext.BaseDirectory` üzerinden okunacak şekilde sabitlendi. Çalışma zamanı log (`hata.log`) ve dışa aktarılan Excel/CSV (`.xlsx`, `.csv`) çıktıları `Environment.SpecialFolder.MyDocuments` (`Belgelerim\KademeliEgitimPlatformu`) klasörüne yönlendirildi.
+* **[Otomatik Şema Kontrolü (`Auto-Migration`)]** `VeritabaniBaglantisi.TablolariHazirla()` ve `EksikTablolariGetir()` ile uygulama açılışında `kademeli_egitim` veritabanının ve 7 zorunlu tablonun varlığı kontrol edilerek eksik tabloların `database/schema.sql` (`CREATE TABLE IF NOT EXISTS`) ile otomatik kurulması sağlandı.
+* **[Zenginleştirilmiş Başlangıç Verisi (`Seed Data`)]** İlk kurulumda `sorular` tablosu boş olduğunda `GorselProgramlama`, `VeriTabanlari` ve `SiberGuvenlik` disiplinlerinin tamamında `Kolay`, `Orta` ve `Zor` seviyelerini kapsayan 23 soruluk başlangıç havuzunun otomatik tohumlanması sağlandı.
+* **[Hata Dayanıklılığı]** PostgreSQL servisinin kapalı olması, hatalı şifre (`28P01`) veya eksik/bozuk `appsettings.json` durumlarında uygulamanın çökmesi engellenerek kullanıcıya çözüm adımlarını içeren Türkçe `MessageBox` uyarıları (`KullaniciDostuHataMesaji`) eklendi.
 
 ### [v0.8.0] — 2026-11-15
 * **[Mimari / Veritabanı]** Yerel SQLite (`sorular.db`, `ilerleme.db`) yapısı tamamen kaldırılarak **PostgreSQL 18 (`localhost:5432`, `kademeli_egitim`, `Npgsql`)** mimarisine geçildi. Tüm tabloları ve indeksleri oluşturan `database/schema.sql` ile merkezi `VeritabaniBaglantisi` sınıfı eklendi.
