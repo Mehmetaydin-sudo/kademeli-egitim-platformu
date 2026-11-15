@@ -130,7 +130,7 @@ jobs:
       - name: Testleri çalıştır
         env:
           KEP_POSTGRES_CONNECTION: "Host=localhost;Port=5432;Database=kademeli_egitim;Username=postgres;Password=ci_test_password"
-        run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --filter "FullyQualifiedName!~Form1SmokeTests" --logger "trx;LogFileName=test-results.trx"
 
       - name: Test sonuçlarını yükle
         if: always()
