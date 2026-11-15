@@ -6,27 +6,42 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.6.0</Version>
+    <Version>0.7.0</Version>
     <AssemblyName>KademeliEgitimPlatformu</AssemblyName>
     <RootNamespace>KademeliEgitimPlatformu</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Test projesi ayrı derlenir; ana uygulamaya dahil edilmez. -->
+    <!-- Test ve geliştirici araçları ayrı derlenir; ana uygulamaya dahil edilmez. -->
     <Compile Remove="tests\**" />
     <None Remove="tests\**" />
     <EmbeddedResource Remove="tests\**" />
+    <Compile Remove="tools\**" />
+    <None Remove="tools\**" />
+    <EmbeddedResource Remove="tools\**" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="Data\Sorular.json">
+    <!-- Öğrenci bilgisayarlarına düz metin soru dosyası kopyalanmaz.
+         Yayın çıktısında yalnızca AES-256-GCM ile şifrelenmiş Sorular.dat bulunur. -->
+    <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Data\Sorular.dat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="Data\Sorular.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
 </Project>

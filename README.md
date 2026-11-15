@@ -14,24 +14,26 @@ Ortaöğretim ve ön lisans öğrencileri için **%100 çevrimdışı (offline)*
 
 ## 🚀 Temel Özellikler
 
-* **%100 Çevrimdışı SQLite Mimarisi:** Sunucu veya internet gerektirmeden sorular `sorular.db`, kullanıcı ilerlemesi ise `ilerleme.db` üzerinde yerel SQLite tablolarında tutulur.
+* **%100 Çevrimdışı SQLite Mimarisi:** Sunucu veya internet gerektirmeden sorular `sorular.db`, kullanıcı ilerlemesi ise `ilerleme.db` üzerinde yerel SQLite tablolarında tutulur. Veri erişimi `ISoruDeposu` / `IIlerlemeDeposu` arayüzleri arkasındadır; ileride merkezi bir sunucuya (ör. PostgreSQL) geçiş için yalnızca yeni depo uygulaması yazılır.
+* **Şifreli Soru Havuzu:** Sorular düz metin olarak dağıtılmaz. `Data/Sorular.dat` paketi ve SQLite'taki `Veri` sütunu **AES-256-GCM** ile şifrelenir; başlıklar **HMAC-SHA256** özeti olarak saklanır. Böylece dosya veya veritabanı bir araçla açılsa bile soru metinleri okunamaz.
 * **Kademeli Zorluk Sistemi:**
   * **Kolay Mod** — her zaman açıktır.
-  * **Orta Mod** — en az bir modülde **%75 başarı** ile açılır (kilit gerçekten uygulanır, yalnızca görsel değildir).
-  * **Zor Mod** — gizli sözdizimi tuzaklarını içeren gömülü kod simülatörüdür.
+  * **Ara Sınavlar** — her modül için 5 soruluk bir ara sınav vardır; geçme barajı **%70**'tir.
+  * **Orta Mod** — üç modülün ara sınavı da geçildiğinde açılır; karma sınav barajı **%75**'tir.
+  * **Zor Mod** — Orta Mod karma sınavı %75 ile geçilince açılan, gizli sözdizimi tuzaklarını içeren gömülü kod simülatörüdür. Kilit yalnızca görsel değildir; giriş noktaları da kontrol eder.
 * **Pedagojik "Neden Yanlış" Paneli:** Yanlış şık seçildiğinde hatanın kaynağını sade bir dille anında açıklar.
 * **Gömülü Kod Simülatörü (Roslyn):** Editördeki C# kodunu gerçek Roslyn derleyicisiyle, tamamen çevrimdışı denetler. Hatalar satır/sütun numarası ve Türkçe pedagojik ipuçlarıyla listelenir; sabit iki kalıba bağlı değildir.
-* **Güvenli USB Paket Yükleme:** İnternetsiz ortamlarda dışarıdan `.json` soru paketlerini şema doğrulaması (`SoruGecerliMi`) ve 5 MB boyut sınırıyla SQLite veri tabanına aktarır. Hatalı JSON için anlaşılır hata mesajı üretir.
+* **Güvenli USB Paket Yükleme:** İnternetsiz ortamlarda dışarıdan şifreli `.dat` veya düz `.json` soru paketlerini şema doğrulaması (`SoruGecerliMi`) ve 5 MB boyut sınırıyla SQLite veri tabanına aktarır. Bozuk/yanlış anahtarlı paketler için anlaşılır hata mesajı üretir.
 * **Kalıcı Oyunlaştırma:** Cihaz içi SQLite profilinde korunan başarı yüzdeleri, ipucu jetonları ve rozetler; masaüstüne indirilebilir `.txt` hata karnesi.
 * **Soru Bazlı Hata Karnesi:** Yanlış cevaplar (soru, seçilen cevap, doğru cevap ve açıklama) `ilerleme.db` içindeki `YanlisCevaplar` tablosunda saklanır; karne son oturumla sınırlı değildir (en yeni 300 kayıt).
 * **Disiplin Bazlı Puanlama:** Karma sınavda her disiplin kendi sorularından ayrı değerlendirilir; bir modülün yüzdesi diğerlerini ezmez.
 * **Soru ve Şık Karıştırma:** Her sınavda soru sırası ve şıklar rastgelelenir; doğru cevap ve yanlış açıklamaları yeni sıraya birlikte taşınır (ezberleme önlenir).
 * **Klavye Kısayolları:** Sınav sırasında `1`–`4` tuşlarıyla şık seçilir, `Enter` ile sonraki soruya geçilir.
 * **Font Önbelleği:** Arayüz fontları `ConcurrentDictionary` tabanlı önbellekten alınır; ekran çizimlerinde GDI+ tutamacı sızıntısı oluşmaz.
-* **Düşük Donanım Optimizasyonu:** Ekranlar tembel oluşturulur, SQLite WAL kullanılır, değişmeyen `Sorular.json` senkronizasyonu SHA-256 özetiyle atlanır, Roslyn analizi arka planda çalışır ve paneller çift tamponludur. 1366×768 çözünürlük ve 4 GB RAM'li makineler hedeflenir.
+* **Düşük Donanım Optimizasyonu:** Ekranlar tembel oluşturulur, SQLite WAL kullanılır, değişmeyen `Sorular.dat` senkronizasyonu HMAC-SHA256 özetiyle atlanır, Roslyn analizi arka planda çalışır ve paneller çift tamponludur. 1366×768 çözünürlük ve 4 GB RAM'li makineler hedeflenir.
 * **Otomatik Testler ve CI:** xUnit test paketi ve GitHub Actions iş akışı; her push'ta Release derlemesi ve testler çalışır.
 * **Dayanıklı Veri Konumu:** Uygulama klasörü yazılabilirse veriler orada (`Data/`), değilse `%LOCALAPPDATA%\KademeliEgitimPlatformu\Data` altında tutulur. Böylece Program Files kurulumlarında yönetici izni gerekmez.
-* **Soru Havuzu Senkronizasyonu:** `Data/Sorular.json` her açılışta veritabanıyla senkronize edilir; yeni sorular eklenir, aynı başlıklı sorular güncellenir.
+* **Soru Havuzu Senkronizasyonu:** `Data/Sorular.dat` (şifreli paket) her açılışta veritabanıyla senkronize edilir; yeni sorular eklenir, aynı başlıklı sorular güncellenir. Paket değişmediyse HMAC özeti sayesinde senkronizasyon atlanır.
 
 ---
 
@@ -59,7 +61,7 @@ dotnet publish KademeliEgitimPlatformu.csproj -p:PublishProfile=Okul-x86
 ```
 
 Çıktı: `bin\Release\net8.0-windows\publish\win-x86\` (ReadyToRun açık, trimming kapalı).
-`Data/Sorular.json` çıktı klasörüne otomatik kopyalanır.
+Yayın çıktısına **yalnızca şifreli `Data/Sorular.dat`** kopyalanır; düz metin `Sorular.json` öğrenci bilgisayarlarına gitmez.
 
 Yalnızca 64-bit makineler için daha küçük bir yayın istenirse:
 
@@ -71,13 +73,14 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=
 
 ## 📚 Soru Havuzu ve Paket Biçimi
 
-Soru havuzu `Data/Sorular.json` dosyasındadır. Dışarıdan yüklenen paketler de aynı biçimi kullanır:
+Soru havuzunun düzenlenebilir kaynağı `Data/Sorular.json` dosyasıdır. Uygulama yayınlanırken bu dosya şifreli `Data/Sorular.dat` paketine dönüştürülür. Dışarıdan yüklenen paketler de aynı biçimi kullanır:
 
 ```json
 [
   {
     "Disiplin": "GorselProgramlama",
     "Zorluk": "Orta",
+    "Etiket": "AraSinav",
     "Baslik": "Soru metni buraya yazılır.",
     "KodBlogu": "// İsteğe bağlı kod bloğu\nint x = 1;",
     "Secenekler": ["A şıkkı", "B şıkkı", "C şıkkı", "D şıkkı"],
@@ -93,10 +96,21 @@ Soru havuzu `Data/Sorular.json` dosyasındadır. Dışarıdan yüklenen paketler
 
 * `Disiplin`: `GorselProgramlama`, `VeriTabanlari`, `SiberGuvenlik` (sayısal değerler de kabul edilir).
 * `Zorluk`: `Kolay`, `Orta`, `Zor` (sayısal değerler de kabul edilir).
+* `Etiket`: İsteğe bağlıdır. `AraSinav` olan sorular yalnızca modül ara sınavlarında kullanılır; boş bırakılan sorular normal modül/karma sınav havuzuna girer.
 * Her soruda **tam 4 şık** bulunmalıdır; `DogruSecenekIndex` 0–3 arasındadır.
-* Aynı `Baslik` ile ikinci bir soru eklenmez (başlık benzersizdir).
+* Aynı `Baslik` ile ikinci bir soru eklenmez (başlık benzersizdir; veritabanında HMAC özetiyle saklanır).
 
-> **Not:** Depodaki örnek havuz şu anda **3 soru** içeriyor (Kolay 2, Orta 1, Zor 0). Gerçek kullanımda havuzun genişletilmesi gerekir; Zor seviyede soru bulunmadığı için Zor Mod, kod simülatörü olarak çalışır.
+### Şifreli paket üretimi
+
+`Data/Sorular.json` her değiştiğinde şifreli paket yeniden üretilmelidir:
+
+```bash
+dotnet run --project tools/SoruPaketleyici -- Data/Sorular.json Data/Sorular.dat
+```
+
+Araç, tüm soruları `SoruGecerliMi` ile doğrular; geçersiz soru varsa hangi başlıkta olduğunu söyleyerek durur. Çıktı **AES-256-GCM** ile şifrelenir ve `KEP1` imzası taşır; dosya içinde düz metin soru, başlık veya `AraSinav` etiketi bulunmaz.
+
+> **Not:** Depodaki havuz **18 soru** içeriyor: 3 genel soru (Görsel Programlama, Veri Tabanları, Siber Güvenlik) ve her modül için 5'er ara sınav sorusu. Gerçek kullanımda havuzun genişletilmesi önerilir.
 
 ---
 
@@ -105,13 +119,19 @@ Soru havuzu `Data/Sorular.json` dosyasındadır. Dışarıdan yüklenen paketler
 ```
 KademeliEgitimPlatformu/
 ├── Data/
-│   └── Sorular.json          # Başlangıç soru havuzu
+│   ├── Sorular.json          # Düzenlenebilir soru kaynağı (yayına kopyalanmaz)
+│   └── Sorular.dat           # AES-256-GCM ile şifrelenmiş soru paketi
 ├── Models/
-│   ├── Soru.cs               # Soru, DisiplinTuru, ZorlukSeviyesi
+│   ├── Soru.cs               # Soru, DisiplinTuru, ZorlukSeviyesi, Etiket
+│   ├── SinavTuru.cs          # Normal sınav / ara sınav ayrımı
 │   ├── SoruGorunumu.cs       # Şık karıştırma + doğru cevap/açıklama eşlemesi
 │   └── YanlisKaydi.cs        # Hata karnesi kaydı
 ├── Services/
-│   ├── SoruServisi.cs        # SQLite soru havuzu + paket yükleme + senkronizasyon
+│   ├── SoruServisi.cs        # Şifreli SQLite soru havuzu + paket yükleme + migrasyon
+│   ├── SoruKoruyucu.cs       # AES-256-GCM şifreleme ve HMAC-SHA256 başlık özeti
+│   ├── KademeServisi.cs      # Ara sınav / Orta Mod / Zor Mod geçiş kuralları
+│   ├── ISoruDeposu.cs        # Soru veri erişim arayüzü (sunucu geçişine hazır)
+│   ├── IIlerlemeDeposu.cs    # İlerleme veri erişim arayüzü
 │   ├── IlerlemeServisi.cs    # Kalıcı kullanıcı ilerlemesi (ilerleme.db)
 │   ├── KarneServisi.cs       # Yanlış cevap kayıtları + karne raporu
 │   ├── PuanlamaServisi.cs    # Disiplin bazlı puanlama (saf fonksiyonlar)
@@ -119,10 +139,12 @@ KademeliEgitimPlatformu/
 │   ├── FontOnbellegi.cs      # GDI+ font önbelleği
 │   ├── SqliteYardimcisi.cs   # WAL / busy_timeout ortak bağlantı ayarları
 │   └── VeriYolu.cs           # Yazılabilir veri klasörünü belirler
+├── tools/
+│   └── SoruPaketleyici/      # JSON → şifreli .dat paket üretim aracı
 ├── BufferedPanel.cs          # Çift tamponlu panel (titremesiz çizim)
 ├── Form1.cs                  # Çekirdek form, sidebar, ekran geçişi, kısayollar
 ├── Form1.AnaMenu.cs          # Kontrol paneli, modül/zorluk kartları, USB paket yükleme
-├── Form1.Sinav.cs            # Sınav akışı, şık karıştırma, puanlama
+├── Form1.Sinav.cs            # Sınav ve ara sınav akışı, şık karıştırma, puanlama
 ├── Form1.Simulator.cs        # Roslyn simülatörü ve hata karnesi
 ├── Form1.Designer.cs
 ├── Program.cs                # Giriş noktası + genel hata yakalama
@@ -143,6 +165,17 @@ dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.cs
 ---
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+
+### [v0.7.0] — 2026-11-12
+* **[Güvenlik]** Soru havuzu artık düz metin dağıtılmıyor. `Data/Sorular.dat` paketi ve SQLite'taki `Veri` sütunu **AES-256-GCM** ile şifreleniyor; başlıklar **HMAC-SHA256** özetiyle saklanıyor. SHA-256'nın "soruları metin olarak okunamaz yapma" beklentisini karşılamadığı hocanın geri bildirimi üzerine doğru kriptografik araçlara geçildi.
+* **[Güvenlik]** Eski (v0.6 ve öncesi) düz metin `sorular.db` dosyaları ilk açılışta otomatik olarak şifreli şemaya yükseltiliyor; USB ile eklenmiş sorular ve kullanıcı ilerlemesi korunuyor. Veri kaybı yok.
+* **[Güvenlik]** `Data/Sorular.json` yalnızca geliştirici kaynağı olarak repoda kalıyor; yayın çıktısına ve öğrenci bilgisayarlarına **kopyalanmıyor**. Paket üretimi `tools/SoruPaketleyici` ile yapılıyor.
+* **[Eklendi]** Her modül için 5 soruluk **ara sınav**: Görsel Programlama, Veri Tabanları ve Siber Güvenlik. Geçme barajı **%70**; sonuç `ilerleme.db` içinde kalıcı saklanıyor.
+* **[Eklendi]** Yeni kademe kuralları: üç ara sınavın tamamı geçilince **Orta Mod**, Orta Mod karma sınavı **%75** ile geçilince **Zor Mod** açılıyor. Zor Mod kilidi yalnızca görsel değil; menü ve simülatör giriş noktaları da kontrol ediyor.
+* **[Eklendi]** Modül kartlarında "Ara Sınav" butonu ve geçildi/bekliyor durumu; zorluk kartlarında eksik ara sınavların adları gösteriliyor.
+* **[Geliştirildi]** SQLite'a bağımlılığı azaltmak için `ISoruDeposu` ve `IIlerlemeDeposu` arayüzleri eklendi. İleride merkezi/çok kullanıcılı kullanım için PostgreSQL gibi bir sunucuya geçişte arayüz kodu değişmeyecek; yalnızca yeni depo uygulaması yazılacak.
+* **[Geliştirildi]** Soru havuzu 18 soruya çıkarıldı: 3 genel soru + her modül için 5 ara sınav sorusu. SHA-256/PBKDF2/HMAC/AES içerikleri hocanın geri bildirimini doğrudan karşılayacak biçimde eklendi.
+* **[Geliştirildi]** Test sayısı **65**'e çıktı: şifreleme/paket, düz metin sızıntısı, DB migrasyonu, ara sınav filtresi ve kademe geçiş kuralları test ediliyor.
 
 ### [v0.6.0] — 2026-11-11
 * **[Performans]** Ekranlar tembel oluşturuluyor: açılışta yalnızca ana menü kurulur; sınav ve simülatör ilk açılışta hazırlanır. Menüye her dönüşte yapılan gereksiz yeniden çizim kaldırıldı.
@@ -214,7 +247,9 @@ dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.cs
 
 ## ⚠️ Bilinen Sınırlar
 
-* Depodaki örnek soru havuzu **3 sorudur** (Kolay 2, Orta 1, Zor 0). Zor seviyede soru eklenene kadar Zor Mod, kod simülatöründen ibarettir.
+* Depodaki örnek soru havuzu **18 sorudur**: 3 genel soru ve her modül için 5'er ara sınav sorusu. Gerçek sınav kapsamı için havuzun genişletilmesi gerekir.
+* **Şifreleme sınırı:** Uygulama çevrimdışı dağıtıldığı için AES anahtarı programın içindedir. Kararlı bir kişi derlenmiş uygulamadan anahtarı çıkarıp paketi açabilir. Bu katman düz metin erişimini ve kopyala-yapıştır yoluyla soru sızmasını engelleyen **caydırıcı** bir korumadır; gerçek sınav güvenliği için soruların yetkili bir sunucudan gelmesi ve anahtarın istemcide bulunmaması gerekir.
+* **SQLite sınırı:** SQLite tek dosyalı yerel kullanım için uygundur; aynı anda çok sayıda kullanıcının aynı veriye yazdığı merkezi senaryolarda yetersiz kalabilir. Bu nedenle veri erişimi arayüzler (`ISoruDeposu`, `IIlerlemeDeposu`) arkasına alındı; sunucu tabanlı bir veritabanına geçiş için yalnızca yeni depo uygulaması gerekir.
 * Roslyn simülatörü kodu bellek içinde derler ve çalıştırmaz; yalnızca sözdizimi ve tip hatalarını bildirir. 20.000 karakter sınırı ve 5 saniyelik analiz zaman aşımı vardır.
 * Hata karnesi en yeni **300** yanlış kaydı tutar; daha eski kayıtlar otomatik budanır.
 

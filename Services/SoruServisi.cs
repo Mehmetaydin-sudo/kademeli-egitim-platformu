@@ -13,18 +13,27 @@ namespace KademeliEgitimPlatformu.Services
 {
     /// <summary>
     /// Soru havuzunu yerel SQLite dosyasında (Data/sorular.db) tutar.
-    /// Her açılışta Data/Sorular.json içindeki sorular veritabanıyla senkronize edilir:
-    /// yeni sorular eklenir, başlığı aynı olan sorular güncellenir.
-    /// Tablo: Sorular(Id, Baslik UNIQUE, Disiplin, Zorluk, Veri)
+    ///
+    /// GÜVENLİK: v0.7.0'dan itibaren soru metinleri düz metin saklanmaz.
+    ///   • Paket dosyası (Data/Sorular.dat) AES-256-GCM ile şifrelenir.
+    ///   • SQLite'taki Veri sütunu aynı yöntemle şifrelenir.
+    ///   • Baslik sütununda düz başlık yerine HMAC-SHA256 özeti tutulur.
+    /// Böylece veritabanı bir araçla açılsa bile sorular okunamaz.
+    ///
+    /// Tablo: Sorular(Id, Baslik UNIQUE, Disiplin, Zorluk, Etiket, Veri)
     ///   - Disiplin/Zorluk: filtreleme için ayrı, indeksli sütunlar
-    ///   - Veri: sorunun tamamı (şıklar, kod bloğu, yanlış cevap açıklamaları) JSON olarak
+    ///   - Etiket: "AraSinav" olan sorular modül ara sınavlarında kullanılır
+    ///   - Veri: sorunun tamamı (şıklar, kod bloğu, açıklamalar) şifreli olarak
     /// </summary>
-    public class SoruServisi
+    public class SoruServisi : ISoruDeposu
     {
         private const long MaksPaketBoyutu = 5 * 1024 * 1024; // 5 MB
-        private const string JsonHashAnahtari = "jsonHash";
+        private const string PaketHashAnahtari = "paketHash";
+        private const string SemaSurumuAnahtari = "semaSurumu";
+        private const int GuncelSemaSurumu = 2;
+        private const string AraSinavEtiketi = "AraSinav";
 
-        private static readonly JsonSerializerOptions JsonSecenekleri = new()
+        internal static readonly JsonSerializerOptions JsonSecenekleri = new()
         {
             PropertyNameCaseInsensitive = true,
             ReadCommentHandling = JsonCommentHandling.Skip,
@@ -32,7 +41,7 @@ namespace KademeliEgitimPlatformu.Services
             Converters = { new JsonStringEnumConverter() }
         };
 
-        private readonly string _jsonYolu;
+        private readonly string _paketYolu;
         private readonly string _baglantiMetni;
 
         /// <summary>Son DisaridanPaketYukle çağrısında geçersiz olduğu için atlanan soru sayısı.</summary>
@@ -40,7 +49,7 @@ namespace KademeliEgitimPlatformu.Services
 
         public SoruServisi(string? jsonYolu = null, string? veritabaniYolu = null)
         {
-            _jsonYolu = jsonYolu ?? VeriYolu.SorularJsonYolu;
+            _paketYolu = jsonYolu ?? VeriYolu.SorularPaketYolu;
             string dbYolu = veritabaniYolu ?? VeriYolu.SorularVeritabaniYolu;
 
             string? dbKlasoru = Path.GetDirectoryName(dbYolu);
@@ -98,10 +107,25 @@ namespace KademeliEgitimPlatformu.Services
             return Oku(komut);
         }
 
+        /// <summary>Belirtilen modülün "AraSinav" etiketli sorularını getirir.</summary>
+        public List<Soru> AraSinavSorulariniGetir(DisiplinTuru disiplin)
+        {
+            using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
+            using var komut = baglanti.CreateCommand();
+
+            komut.CommandText =
+                "SELECT Id, Veri FROM Sorular WHERE Disiplin = $disiplin AND Etiket = $etiket ORDER BY Id;";
+            komut.Parameters.AddWithValue("$disiplin", (int)disiplin);
+            komut.Parameters.AddWithValue("$etiket", AraSinavEtiketi);
+
+            return Oku(komut);
+        }
+
         // ==================== USB / KLASÖRDEN PAKET YÜKLEME ====================
         /// <summary>
-        /// Dışarıdan .json soru paketi yükler. Geçersiz sorular atlanır (SonPaketAtlananSayisi),
-        /// başlığı zaten havuzda olan sorular tekrar eklenmez. Eklenen soru sayısını döndürür.
+        /// Dışarıdan .json veya şifreli .dat soru paketi yükler. Geçersiz sorular
+        /// atlanır (SonPaketAtlananSayisi), başlığı zaten havuzda olan sorular tekrar
+        /// eklenmez. Eklenen soru sayısını döndürür.
         /// </summary>
         public int DisaridanPaketYukle(string secilenDosyaYolu)
         {
@@ -114,7 +138,20 @@ namespace KademeliEgitimPlatformu.Services
             if (new FileInfo(secilenDosyaYolu).Length > MaksPaketBoyutu)
                 throw new InvalidDataException("Paket dosyası 5 MB sınırını aşıyor.");
 
-            string yeniJson = File.ReadAllText(secilenDosyaYolu);
+            string yeniJson;
+            try
+            {
+                yeniJson = SoruKoruyucu.PaketOku(secilenDosyaYolu);
+            }
+            catch (CryptographicException ex)
+            {
+                throw new InvalidDataException(
+                    "Paket şifresi çözülemedi. Dosya bu uygulama sürümüyle uyumlu değil.", ex);
+            }
+            catch (FormatException ex)
+            {
+                throw new InvalidDataException("Paket içeriği bozuk veya okunamıyor.", ex);
+            }
 
             List<Soru> yeniSorular;
             try
@@ -174,7 +211,61 @@ namespace KademeliEgitimPlatformu.Services
             if (s.YanlisCevapAciklamalari != null && s.YanlisCevapAciklamalari.Keys.Any(k => k < 0 || k > 3))
                 return false;
 
+            // Etiket çok uzun olmamalı (veritabanı ve arayüz taşmasın)
+            if (s.Etiket != null && s.Etiket.Length > 50)
+                return false;
+
             return true;
+        }
+
+        // ==================== PAKET ÜRETİMİ ====================
+        /// <summary>
+        /// Düz JSON soru dosyasını doğrular ve şifreli .dat paketine dönüştürür.
+        /// Geliştirici aracı (tools/SoruPaketleyici) tarafından kullanılır.
+        /// Geçersiz soru varsa sessizce atlamaz; hata fırlatır.
+        /// </summary>
+        public static int PaketOlustur(string jsonYolu, string ciktiYolu)
+        {
+            if (!File.Exists(jsonYolu))
+                throw new FileNotFoundException("Kaynak JSON dosyası bulunamadı.", jsonYolu);
+
+            string json = File.ReadAllText(jsonYolu);
+
+            List<Soru>? sorular;
+            try
+            {
+                sorular = JsonSerializer.Deserialize<List<Soru>>(json, JsonSecenekleri);
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidDataException("Kaynak JSON biçimi hatalı.", ex);
+            }
+
+            if (sorular == null || sorular.Count == 0)
+                throw new InvalidDataException("Kaynak JSON boş bir soru listesi içeriyor.");
+
+            var gecerliSorular = new List<Soru>(sorular.Count);
+            foreach (Soru? soru in sorular)
+            {
+                if (!SoruGecerliMi(Normallestir(soru!)))
+                    throw new InvalidDataException($"Geçersiz soru: {soru?.Baslik ?? "(başlıksız)"}");
+
+                gecerliSorular.Add(soru!);
+            }
+
+            var yazmaSecenekleri = new JsonSerializerOptions(JsonSecenekleri)
+            {
+                WriteIndented = true
+            };
+            string temizJson = JsonSerializer.Serialize(gecerliSorular, yazmaSecenekleri);
+            byte[] paket = SoruKoruyucu.PaketSifrele(Encoding.UTF8.GetBytes(temizJson));
+
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(ciktiYolu));
+            if (!string.IsNullOrEmpty(klasor))
+                Directory.CreateDirectory(klasor);
+
+            File.WriteAllBytes(ciktiYolu, paket);
+            return gecerliSorular.Count;
         }
 
         // ==================== İÇ METOTLAR ====================
@@ -186,6 +277,7 @@ namespace KademeliEgitimPlatformu.Services
         private static Soru Normallestir(Soru soru)
         {
             soru.Baslik = (soru.Baslik ?? string.Empty).Trim();
+            soru.Etiket = string.IsNullOrWhiteSpace(soru.Etiket) ? null : soru.Etiket.Trim();
             soru.Secenekler ??= new List<string>();
             soru.YanlisCevapAciklamalari ??= new Dictionary<int, string>();
 
@@ -204,41 +296,134 @@ namespace KademeliEgitimPlatformu.Services
             using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
             SqliteYardimcisi.WalEtkinlestir(baglanti);
 
+            using (var komut = baglanti.CreateCommand())
+            {
+                komut.CommandText =
+                    "CREATE TABLE IF NOT EXISTS Sorular (" +
+                    "  Id       INTEGER PRIMARY KEY AUTOINCREMENT," +
+                    "  Baslik   TEXT    NOT NULL UNIQUE," +
+                    "  Disiplin INTEGER NOT NULL," +
+                    "  Zorluk   INTEGER NOT NULL," +
+                    "  Etiket   TEXT    NULL," +
+                    "  Veri     TEXT    NOT NULL);" +
+                    "CREATE INDEX IF NOT EXISTS IX_Sorular_Disiplin_Zorluk ON Sorular (Disiplin, Zorluk);" +
+                    "CREATE TABLE IF NOT EXISTS Meta (" +
+                    "  Anahtar TEXT PRIMARY KEY," +
+                    "  Deger   TEXT NOT NULL);";
+                komut.ExecuteNonQuery();
+            }
+
+            EksikKolonlariEkle(baglanti);
+
+            // Etiket indeksi, eski veritabanlarına sütun eklendikten SONRA kurulmalı.
+            using (var komut = baglanti.CreateCommand())
+            {
+                komut.CommandText = "CREATE INDEX IF NOT EXISTS IX_Sorular_Etiket ON Sorular (Etiket);";
+                komut.ExecuteNonQuery();
+            }
+
+            SemayiYukselt(baglanti);
+        }
+
+        private static void EksikKolonlariEkle(SqliteConnection baglanti)
+        {
+            if (!KolonVarMi(baglanti, "Sorular", "Etiket"))
+            {
+                using var komut = baglanti.CreateCommand();
+                komut.CommandText = "ALTER TABLE Sorular ADD COLUMN Etiket TEXT;";
+                komut.ExecuteNonQuery();
+            }
+        }
+
+        private static bool KolonVarMi(SqliteConnection baglanti, string tablo, string kolon)
+        {
             using var komut = baglanti.CreateCommand();
-            komut.CommandText =
-                "CREATE TABLE IF NOT EXISTS Sorular (" +
-                "  Id       INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "  Baslik   TEXT    NOT NULL UNIQUE," +
-                "  Disiplin INTEGER NOT NULL," +
-                "  Zorluk   INTEGER NOT NULL," +
-                "  Veri     TEXT    NOT NULL);" +
-                "CREATE INDEX IF NOT EXISTS IX_Sorular_Disiplin_Zorluk ON Sorular (Disiplin, Zorluk);" +
-                "CREATE TABLE IF NOT EXISTS Meta (" +
-                "  Anahtar TEXT PRIMARY KEY," +
-                "  Deger   TEXT NOT NULL);";
-            komut.ExecuteNonQuery();
+            komut.CommandText = $"PRAGMA table_info({tablo});";
+            using var okuyucu = komut.ExecuteReader();
+            while (okuyucu.Read())
+            {
+                if (string.Equals(okuyucu.GetString(1), kolon, StringComparison.OrdinalIgnoreCase))
+                    return true;
+            }
+            return false;
         }
 
         /// <summary>
-        /// Data/Sorular.json içeriğini veritabanıyla senkronize eder.
-        /// Dosyanın SHA-256 özeti değişmediyse senkronizasyon tamamen atlanır;
-        /// böylece her açılışta gereksiz JSON çözümleme ve yazma yapılmaz.
+        /// v0.6 ve öncesindeki düz metin veritabanını şifreli biçime yükseltir.
+        /// USB ile eklenmiş sorular korunur; hiçbir kayıt silinmez.
+        /// </summary>
+        private static void SemayiYukselt(SqliteConnection baglanti)
+        {
+            int surum = MetaOkuInt(baglanti, SemaSurumuAnahtari, 1);
+            if (surum >= GuncelSemaSurumu)
+                return;
+
+            var satirlar = new List<(long Id, string Baslik, string Veri)>();
+            using (var komut = baglanti.CreateCommand())
+            {
+                komut.CommandText = "SELECT Id, Baslik, Veri FROM Sorular;";
+                using var okuyucu = komut.ExecuteReader();
+                while (okuyucu.Read())
+                    satirlar.Add((okuyucu.GetInt64(0), okuyucu.GetString(1), okuyucu.GetString(2)));
+            }
+
+            using (var islem = baglanti.BeginTransaction())
+            {
+                foreach (var satir in satirlar)
+                {
+                    string baslik = SoruKoruyucu.OzetMi(satir.Baslik)
+                        ? satir.Baslik
+                        : SoruKoruyucu.BaslikOzeti(satir.Baslik);
+
+                    string veri = SoruKoruyucu.SifreliMi(satir.Veri)
+                        ? satir.Veri
+                        : SoruKoruyucu.MetinSifrele(satir.Veri);
+
+                    if (baslik == satir.Baslik && veri == satir.Veri)
+                        continue;
+
+                    using var komut = baglanti.CreateCommand();
+                    komut.Transaction = islem;
+                    komut.CommandText = "UPDATE Sorular SET Baslik = $baslik, Veri = $veri WHERE Id = $id;";
+                    komut.Parameters.AddWithValue("$baslik", baslik);
+                    komut.Parameters.AddWithValue("$veri", veri);
+                    komut.Parameters.AddWithValue("$id", satir.Id);
+                    komut.ExecuteNonQuery();
+                }
+
+                MetaYaz(baglanti, islem, SemaSurumuAnahtari, GuncelSemaSurumu.ToString());
+                islem.Commit();
+            }
+        }
+
+        private static int MetaOkuInt(SqliteConnection baglanti, string anahtar, int varsayilan)
+        {
+            using var komut = baglanti.CreateCommand();
+            komut.CommandText = "SELECT Deger FROM Meta WHERE Anahtar = $anahtar;";
+            komut.Parameters.AddWithValue("$anahtar", anahtar);
+            return int.TryParse(komut.ExecuteScalar() as string, out int deger) ? deger : varsayilan;
+        }
+
+        /// <summary>
+        /// Şifreli paket dosyasını veritabanıyla senkronize eder.
+        /// Paketin HMAC-SHA256 özeti değişmediyse senkronizasyon tamamen atlanır.
         /// </summary>
         private void JsondanSenkronizeEt()
         {
-            if (!File.Exists(_jsonYolu))
+            string? paketYolu = PaketDosyasi();
+            if (paketYolu == null)
                 return;
 
             try
             {
-                string json = File.ReadAllText(_jsonYolu);
-                string hash = Convert.ToHexString(
-                    SHA256.HashData(Encoding.UTF8.GetBytes(json)));
+                byte[] paketVerisi = File.ReadAllBytes(paketYolu);
+                string hash = SoruKoruyucu.PaketOzeti(paketVerisi);
 
                 using var baglanti = SqliteYardimcisi.Ac(_baglantiMetni);
                 if (HashAyniMi(baglanti, hash))
                     return;
 
+                string json = SoruKoruyucu.PaketOku(paketYolu);
                 var sorular = JsonSerializer.Deserialize<List<Soru>>(json, JsonSecenekleri)
                               ?? new List<Soru>();
 
@@ -254,17 +439,37 @@ namespace KademeliEgitimPlatformu.Services
 
                 HashKaydet(baglanti, hash);
             }
-            catch (Exception ex) when (ex is JsonException || ex is IOException || ex is UnauthorizedAccessException)
+            catch (Exception ex) when (ex is JsonException || ex is IOException ||
+                                       ex is UnauthorizedAccessException || ex is InvalidDataException ||
+                                       ex is CryptographicException || ex is FormatException)
             {
-                // Bozuk veya okunamayan başlangıç dosyası: havuz mevcut haliyle devam eder, uygulama çökmez.
+                // Bozuk/okunamayan başlangıç paketi: havuz mevcut haliyle devam eder,
+                // uygulama çökmez.
             }
+        }
+
+        /// <summary>
+        /// Önce şifreli .dat paketini, yoksa geliştirici kolaylığı için aynı
+        /// klasördeki .json dosyasını kullanır. Yayın çıktısında yalnızca .dat bulunur.
+        /// </summary>
+        private string? PaketDosyasi()
+        {
+            if (File.Exists(_paketYolu))
+                return _paketYolu;
+
+            string jsonYedek = Path.ChangeExtension(_paketYolu, ".json");
+            if (!string.Equals(jsonYedek, _paketYolu, StringComparison.OrdinalIgnoreCase) &&
+                File.Exists(jsonYedek))
+                return jsonYedek;
+
+            return null;
         }
 
         private static bool HashAyniMi(SqliteConnection baglanti, string hash)
         {
             using var komut = baglanti.CreateCommand();
             komut.CommandText = "SELECT Deger FROM Meta WHERE Anahtar = $anahtar;";
-            komut.Parameters.AddWithValue("$anahtar", JsonHashAnahtari);
+            komut.Parameters.AddWithValue("$anahtar", PaketHashAnahtari);
             return string.Equals(komut.ExecuteScalar() as string, hash, StringComparison.Ordinal);
         }
 
@@ -274,8 +479,20 @@ namespace KademeliEgitimPlatformu.Services
             komut.CommandText =
                 "INSERT INTO Meta (Anahtar, Deger) VALUES ($anahtar, $deger) " +
                 "ON CONFLICT(Anahtar) DO UPDATE SET Deger = excluded.Deger;";
-            komut.Parameters.AddWithValue("$anahtar", JsonHashAnahtari);
+            komut.Parameters.AddWithValue("$anahtar", PaketHashAnahtari);
             komut.Parameters.AddWithValue("$deger", hash);
+            komut.ExecuteNonQuery();
+        }
+
+        private static void MetaYaz(SqliteConnection baglanti, SqliteTransaction islem, string anahtar, string deger)
+        {
+            using var komut = baglanti.CreateCommand();
+            komut.Transaction = islem;
+            komut.CommandText =
+                "INSERT INTO Meta (Anahtar, Deger) VALUES ($anahtar, $deger) " +
+                "ON CONFLICT(Anahtar) DO UPDATE SET Deger = excluded.Deger;";
+            komut.Parameters.AddWithValue("$anahtar", anahtar);
+            komut.Parameters.AddWithValue("$deger", deger);
             komut.ExecuteNonQuery();
         }
 
@@ -286,12 +503,14 @@ namespace KademeliEgitimPlatformu.Services
             using var komut = baglanti.CreateCommand();
             komut.Transaction = islem;
             komut.CommandText =
-                "INSERT OR IGNORE INTO Sorular (Baslik, Disiplin, Zorluk, Veri) " +
-                "VALUES ($baslik, $disiplin, $zorluk, $veri);";
-            komut.Parameters.AddWithValue("$baslik", soru.Baslik);
+                "INSERT OR IGNORE INTO Sorular (Baslik, Disiplin, Zorluk, Etiket, Veri) " +
+                "VALUES ($baslik, $disiplin, $zorluk, $etiket, $veri);";
+            komut.Parameters.AddWithValue("$baslik", SoruKoruyucu.BaslikOzeti(soru.Baslik));
             komut.Parameters.AddWithValue("$disiplin", (int)soru.Disiplin);
             komut.Parameters.AddWithValue("$zorluk", (int)soru.Zorluk);
-            komut.Parameters.AddWithValue("$veri", JsonSerializer.Serialize(soru, JsonSecenekleri));
+            komut.Parameters.AddWithValue("$etiket", (object?)soru.Etiket ?? DBNull.Value);
+            komut.Parameters.AddWithValue("$veri",
+                SoruKoruyucu.MetinSifrele(JsonSerializer.Serialize(soru, JsonSecenekleri)));
             return komut.ExecuteNonQuery() > 0;
         }
 
@@ -301,16 +520,19 @@ namespace KademeliEgitimPlatformu.Services
             using var komut = baglanti.CreateCommand();
             komut.Transaction = islem;
             komut.CommandText =
-                "INSERT INTO Sorular (Baslik, Disiplin, Zorluk, Veri) " +
-                "VALUES ($baslik, $disiplin, $zorluk, $veri) " +
+                "INSERT INTO Sorular (Baslik, Disiplin, Zorluk, Etiket, Veri) " +
+                "VALUES ($baslik, $disiplin, $zorluk, $etiket, $veri) " +
                 "ON CONFLICT(Baslik) DO UPDATE SET " +
                 "  Disiplin = excluded.Disiplin," +
                 "  Zorluk   = excluded.Zorluk," +
+                "  Etiket   = excluded.Etiket," +
                 "  Veri     = excluded.Veri;";
-            komut.Parameters.AddWithValue("$baslik", soru.Baslik);
+            komut.Parameters.AddWithValue("$baslik", SoruKoruyucu.BaslikOzeti(soru.Baslik));
             komut.Parameters.AddWithValue("$disiplin", (int)soru.Disiplin);
             komut.Parameters.AddWithValue("$zorluk", (int)soru.Zorluk);
-            komut.Parameters.AddWithValue("$veri", JsonSerializer.Serialize(soru, JsonSecenekleri));
+            komut.Parameters.AddWithValue("$etiket", (object?)soru.Etiket ?? DBNull.Value);
+            komut.Parameters.AddWithValue("$veri",
+                SoruKoruyucu.MetinSifrele(JsonSerializer.Serialize(soru, JsonSecenekleri)));
             komut.ExecuteNonQuery();
         }
 
@@ -320,8 +542,21 @@ namespace KademeliEgitimPlatformu.Services
             using var okuyucu = komut.ExecuteReader();
             while (okuyucu.Read())
             {
-                var soru = JsonSerializer.Deserialize<Soru>(okuyucu.GetString(1), JsonSecenekleri);
-                if (soru == null) continue;
+                Soru? soru;
+                try
+                {
+                    string json = SoruKoruyucu.MetinCoz(okuyucu.GetString(1));
+                    soru = JsonSerializer.Deserialize<Soru>(json, JsonSecenekleri);
+                }
+                catch (Exception ex) when (ex is JsonException || ex is CryptographicException ||
+                                           ex is FormatException)
+                {
+                    // Bozuk tek bir kayıt tüm havuzu kullanılamaz hale getirmesin.
+                    continue;
+                }
+
+                if (soru == null)
+                    continue;
 
                 soru.Id = okuyucu.GetInt32(0); // Kimlik veritabanından gelir
                 sonuc.Add(Normallestir(soru));

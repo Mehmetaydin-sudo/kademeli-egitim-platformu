@@ -17,17 +17,18 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.6.0";
+        private const string Surum = "v0.7.0";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
-        private SoruServisi? _soruServisi;
-        private IlerlemeServisi? _ilerlemeServisi;
+        // Arayüz tipleri, ileride sunucu tabanlı bir depoya geçişi kolaylaştırır.
+        private ISoruDeposu? _soruServisi;
+        private IIlerlemeDeposu? _ilerlemeServisi;
         private KarneServisi? _karneServisi;
         private SimulatorServisi? _simulatorServisi;
 
-        private SoruServisi SoruDeposu => _soruServisi ??= new SoruServisi();
-        private IlerlemeServisi IlerlemeDeposu => _ilerlemeServisi ??= new IlerlemeServisi();
+        private ISoruDeposu SoruDeposu => _soruServisi ??= new SoruServisi();
+        private IIlerlemeDeposu IlerlemeDeposu => _ilerlemeServisi ??= new IlerlemeServisi();
         private KarneServisi KarneDeposu => _karneServisi ??= new KarneServisi();
         private SimulatorServisi Simulator => _simulatorServisi ??= new SimulatorServisi();
 
@@ -45,6 +46,11 @@ namespace KademeliEgitimPlatformu
         private DateTime _sinavBaslangic;
         private System.Windows.Forms.Timer _sinavTimer = new();
 
+        // Aktif sınavın türü ve kapsamı (normal sınav / modül ara sınavı).
+        private SinavTuru _aktifSinavTuru = SinavTuru.Normal;
+        private DisiplinTuru? _aktifSinavDisiplini;
+        private ZorlukSeviyesi? _aktifZorluk;
+
         // SQLite (ilerleme.db) üzerinden yüklenen kalıcı kullanıcı verileri
         // Yeni kullanıcı, kazanmadığı bir başarı yüzdesiyle başlamaz (hepsi 0).
         private int _ipucuJetonu = 3;
@@ -52,6 +58,10 @@ namespace KademeliEgitimPlatformu
         private int _veriTabaniBasari = 0;
         private int _siberBasari = 0;
         private bool _simulatorOduluAlindi = false;
+        private bool _gorselAraSinavGecti = false;
+        private bool _veriTabaniAraSinavGecti = false;
+        private bool _siberAraSinavGecti = false;
+        private bool _ortaModGecti = false;
 
         // Ana Yerleşim: Sol Sidebar + Sağ İçerik Alanı
         private Panel _pnlSidebar = new BufferedPanel();
@@ -114,6 +124,10 @@ namespace KademeliEgitimPlatformu
                 _siberBasari = durum.SiberBasari;
                 _ipucuJetonu = durum.IpucuJetonu;
                 _simulatorOduluAlindi = durum.HataAvcisiKazanildi;
+                _gorselAraSinavGecti = durum.GorselAraSinavGecti;
+                _veriTabaniAraSinavGecti = durum.VeriTabaniAraSinavGecti;
+                _siberAraSinavGecti = durum.SiberAraSinavGecti;
+                _ortaModGecti = durum.OrtaModGecti;
             }
             catch (Exception ex)
             {
@@ -133,12 +147,7 @@ namespace KademeliEgitimPlatformu
 
             try
             {
-                IlerlemeDeposu.Kaydet(new IlerlemeDurumu(
-                    _gorselBasari,
-                    _veriTabaniBasari,
-                    _siberBasari,
-                    _ipucuJetonu,
-                    _simulatorOduluAlindi));
+                IlerlemeDeposu.Kaydet(MevcutIlerleme());
             }
             catch (Exception ex)
             {
@@ -149,6 +158,18 @@ namespace KademeliEgitimPlatformu
                     MessageBoxIcon.Warning);
             }
         }
+
+        /// <summary>Formdaki güncel değerlerden kalıcı ilerleme kaydı üretir.</summary>
+        private IlerlemeDurumu MevcutIlerleme() => new(
+            _gorselBasari,
+            _veriTabaniBasari,
+            _siberBasari,
+            _ipucuJetonu,
+            _simulatorOduluAlindi,
+            _gorselAraSinavGecti,
+            _veriTabaniAraSinavGecti,
+            _siberAraSinavGecti,
+            _ortaModGecti);
 
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
@@ -248,7 +269,7 @@ namespace KademeliEgitimPlatformu
 
             _btnMenuAna = SidebarButonu("🏠  Kontrol Paneli", () => EkranDegistir("ANA"));
             _btnMenuSinav = SidebarButonu("📝  Karma Sınav", () => SinaviBaslat(null, null, "Karma Değerlendirme Sınavı — Tüm Disiplinler"));
-            _btnMenuSimulator = SidebarButonu("🛠️  Kod Simülatörü", () => EkranDegistir("SIM"));
+            _btnMenuSimulator = SidebarButonu("🛠️  Kod Simülatörü", SimulatoruAc);
 
             Label lblAltBilgi = new()
             {
@@ -285,6 +306,27 @@ namespace KademeliEgitimPlatformu
             btn.FlatAppearance.MouseOverBackColor = Color.FromArgb(30, 41, 59);
             btn.Click += (s, e) => tiklamaOlayi();
             return btn;
+        }
+
+        /// <summary>
+        /// Zor Mod (kod simülatörü) yalnızca Orta Mod sınavı geçildikten sonra açılır.
+        /// Kilit, yalnızca görsel değildir; bu giriş noktası da kontrol eder.
+        /// </summary>
+        private void SimulatoruAc()
+        {
+            IlerlemeDurumu durum = MevcutIlerleme();
+            if (!KademeServisi.ZorModAcikMi(durum))
+            {
+                string mesaj = !KademeServisi.OrtaModAcikMi(durum)
+                    ? "Zor Mod henüz kilitli.\n\nÖnce üç modülün ara sınavını geçin:\n" +
+                      KademeServisi.EksikAraSinavMetni(durum)
+                    : "Zor Mod henüz kilitli.\n\nOrta Mod karma sınavını en az %75 başarıyla geçmeniz gerekiyor.";
+
+                MessageBox.Show(mesaj, "Kilitli Mod", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            EkranDegistir("SIM");
         }
 
         private void EkranDegistir(string ekranKodu)

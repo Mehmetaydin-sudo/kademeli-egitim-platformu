@@ -17,9 +17,12 @@ namespace KademeliEgitimPlatformu.Services
         /// <summary>SQLite dosyalarının tutulacağı yazılabilir klasör.</summary>
         public static string VeriKlasoru => _veriKlasoru ??= KlasoruBelirle();
 
-        /// <summary>Kurulumla birlikte gelen soru havuzu (salt okunur kaynak).</summary>
-        public static string SorularJsonYolu =>
-            Path.Combine(AppContext.BaseDirectory, "Data", "Sorular.json");
+        /// <summary>Kurulumla birlikte gelen şifreli soru paketi (salt okunur kaynak).</summary>
+        public static string SorularPaketYolu =>
+            Path.Combine(AppContext.BaseDirectory, "Data", "Sorular.dat");
+
+        /// <summary>Geriye dönük uyumluluk: eski ad, şifreli paket yolunu döndürür.</summary>
+        public static string SorularJsonYolu => SorularPaketYolu;
 
         public static string SorularVeritabaniYolu => Path.Combine(VeriKlasoru, "sorular.db");
 

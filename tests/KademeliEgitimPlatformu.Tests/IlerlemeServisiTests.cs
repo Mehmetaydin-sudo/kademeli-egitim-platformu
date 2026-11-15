@@ -20,6 +20,10 @@ namespace KademeliEgitimPlatformu.Tests
             Assert.Equal(0, durum.SiberBasari);
             Assert.Equal(3, durum.IpucuJetonu);
             Assert.False(durum.HataAvcisiKazanildi);
+            Assert.False(durum.GorselAraSinavGecti);
+            Assert.False(durum.VeriTabaniAraSinavGecti);
+            Assert.False(durum.SiberAraSinavGecti);
+            Assert.False(durum.OrtaModGecti);
         }
 
         [Fact]
@@ -27,7 +31,7 @@ namespace KademeliEgitimPlatformu.Tests
         {
             using var gecici = new GeciciVeritabani();
             var servis = new IlerlemeServisi(gecici.DosyaYolu);
-            var beklenen = new IlerlemeDurumu(80, 65, 90, 7, true);
+            var beklenen = new IlerlemeDurumu(80, 65, 90, 7, true, true, false, true, true);
 
             servis.Kaydet(beklenen);
             IlerlemeDurumu yuklenen = servis.Yukle();
