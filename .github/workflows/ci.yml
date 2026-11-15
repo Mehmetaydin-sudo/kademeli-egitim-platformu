@@ -75,32 +75,36 @@ jobs:
           dotnet-version: "8.0.x"
 
       - name: Yerel PostgreSQL servisini başlat ve test veritabanını hazırla
-        shell: powershell
+        shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
-          $pgService = Get-Service -Name "postgresql*" | Select-Object -First 1
-          if ($null -eq $pgService) {
-              throw "PostgreSQL servisi Windows runner üzerinde bulunamadı."
-          }
+          Get-Service -Name "postgresql*" -ErrorAction SilentlyContinue | Stop-Service -Force -ErrorAction SilentlyContinue
 
-          $pgHba = Join-Path $env:PGDATA "pg_hba.conf"
-          if (Test-Path $pgHba) {
-              (Get-Content $pgHba) -replace '(scram-sha-256|md5)', 'trust' | Set-Content $pgHba
-          }
-
-          if ($pgService.Status -ne 'Running') {
-              Start-Service $pgService.Name
+          $pgBin = if ($env:PGBIN -and (Test-Path (Join-Path $env:PGBIN "psql.exe"))) {
+              $env:PGBIN
           } else {
-              Restart-Service $pgService.Name
+              (Get-ChildItem "C:\Program Files\PostgreSQL\*\bin" | Sort-Object FullName -Descending | Select-Object -First 1).FullName
           }
 
-          $psql = Join-Path $env:PGBIN "psql.exe"
+          if (-not $pgBin) {
+              throw "PostgreSQL bin dizini Windows runner üzerinde bulunamadı."
+          }
+
+          $pgData = Join-Path $env:RUNNER_TEMP "pgdata"
+          if (Test-Path $pgData) {
+              Remove-Item -Recurse -Force $pgData
+          }
+
+          & (Join-Path $pgBin "initdb.exe") -D $pgData -U postgres -A trust --encoding=UTF8 --locale=C
+          & (Join-Path $pgBin "pg_ctl.exe") -D $pgData -l (Join-Path $env:RUNNER_TEMP "pg.log") -o "-p 5432" start -w
+
+          $psql = Join-Path $pgBin "psql.exe"
           & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH PASSWORD 'ci_test_password';"
           & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE kademeli_egitim WITH ENCODING 'UTF8';"
           & $psql -h localhost -p 5432 -U postgres -d kademeli_egitim -v ON_ERROR_STOP=1 -f "database/schema.sql"
 
       - name: appsettings.json test yapılandırmasını oluştur
-        shell: powershell
+        shell: pwsh
         run: |
           $json = @"
           {
@@ -119,18 +123,19 @@ jobs:
             }
           }
           "@
-          $json | Out-File -FilePath "appsettings.json" -Encoding utf8
+          [System.IO.File]::WriteAllText((Join-Path $PWD "appsettings.json"), $json, [System.Text.UTF8Encoding]::new($false))
 
       - name: Bağımlılıkları geri yükle
         run: dotnet restore tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
 
       - name: Release derlemesi
-        run: dotnet build KademeliEgitimPlatformu.csproj -c Release --no-restore
+        run: dotnet build tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --no-restore
 
       - name: Testleri çalıştır
+        shell: pwsh
         env:
           KEP_POSTGRES_CONNECTION: "Host=localhost;Port=5432;Database=kademeli_egitim;Username=postgres;Password=ci_test_password"
-        run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --filter "FullyQualifiedName!~Form1SmokeTests" --logger "trx;LogFileName=test-results.trx"
+        run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --no-build --filter 'FullyQualifiedName!~Form1SmokeTests' --logger "trx;LogFileName=test-results.trx"
 
       - name: Test sonuçlarını yükle
         if: always()
