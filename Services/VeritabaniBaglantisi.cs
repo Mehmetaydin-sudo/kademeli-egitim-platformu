@@ -91,16 +91,28 @@ namespace KademeliEgitimPlatformu.Services
                 Directory.GetCurrentDirectory()
             };
 
+            // Önce gerçek appsettings.json dosyasını ara
             foreach (string baslangic in adaylar)
             {
                 DirectoryInfo? dizin = new(baslangic);
                 while (dizin != null)
                 {
-                    if (File.Exists(Path.Combine(dizin.FullName, "appsettings.json")) ||
-                        File.Exists(Path.Combine(dizin.FullName, "appsettings.example.json")))
-                    {
+                    if (File.Exists(Path.Combine(dizin.FullName, "appsettings.json")))
                         return dizin.FullName;
-                    }
+
+                    dizin = dizin.Parent;
+                }
+            }
+
+            // Bulunamazsa şablon appsettings.example.json dosyasını ara
+            foreach (string baslangic in adaylar)
+            {
+                DirectoryInfo? dizin = new(baslangic);
+                while (dizin != null)
+                {
+                    if (File.Exists(Path.Combine(dizin.FullName, "appsettings.example.json")))
+                        return dizin.FullName;
+
                     dizin = dizin.Parent;
                 }
             }

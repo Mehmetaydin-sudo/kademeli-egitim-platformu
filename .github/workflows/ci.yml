@@ -10,9 +10,60 @@ on:
       - main
 
 jobs:
+  postgres-sema-dogrulama:
+    name: PostgreSQL 18 Konteyner ve Şema Doğrulaması
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ci_test_password
+          POSTGRES_DB: kademeli_egitim
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d kademeli_egitim"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Kaynak kodu çek
+        uses: actions/checkout@v4
+
+      - name: appsettings.json test yapılandırmasını oluştur
+        run: |
+          cat << 'EOF' > appsettings.json
+          {
+            "ConnectionStrings": {
+              "DefaultConnection": "Host=localhost;Port=5432;Database=kademeli_egitim;Username=postgres;Password=ci_test_password"
+            },
+            "DatabaseSettings": {
+              "Provider": "PostgreSQL",
+              "Version": "18",
+              "CommandTimeoutSeconds": 30
+            },
+            "KademeAyarlari": {
+              "KolayOrtaGecisBaraji": 70,
+              "OrtaZorGecisBaraji": 75,
+              "AraSinavSoruSayisi": 5
+            }
+          }
+          EOF
+
+      - name: PostgreSQL 18 konteynerinde database/schema.sql çalıştır
+        env:
+          PGPASSWORD: ci_test_password
+        run: |
+          psql -h localhost -p 5432 -U postgres -d kademeli_egitim -v ON_ERROR_STOP=1 -f database/schema.sql
+          psql -h localhost -p 5432 -U postgres -d kademeli_egitim -c "\dt"
+
   derle-ve-test:
-    name: Derle ve Test Et
+    name: Derle ve Test Et (Windows + PostgreSQL)
     runs-on: windows-latest
+    needs: postgres-sema-dogrulama
 
     steps:
       - name: Kaynak kodu çek
@@ -23,6 +74,53 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
+      - name: Yerel PostgreSQL servisini başlat ve test veritabanını hazırla
+        shell: powershell
+        run: |
+          $ErrorActionPreference = "Stop"
+          $pgService = Get-Service -Name "postgresql*" | Select-Object -First 1
+          if ($null -eq $pgService) {
+              throw "PostgreSQL servisi Windows runner üzerinde bulunamadı."
+          }
+
+          $pgHba = Join-Path $env:PGDATA "pg_hba.conf"
+          if (Test-Path $pgHba) {
+              (Get-Content $pgHba) -replace '(scram-sha-256|md5)', 'trust' | Set-Content $pgHba
+          }
+
+          if ($pgService.Status -ne 'Running') {
+              Start-Service $pgService.Name
+          } else {
+              Restart-Service $pgService.Name
+          }
+
+          $psql = Join-Path $env:PGBIN "psql.exe"
+          & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "ALTER USER postgres WITH PASSWORD 'ci_test_password';"
+          & $psql -h localhost -p 5432 -U postgres -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE kademeli_egitim WITH ENCODING 'UTF8';"
+          & $psql -h localhost -p 5432 -U postgres -d kademeli_egitim -v ON_ERROR_STOP=1 -f "database/schema.sql"
+
+      - name: appsettings.json test yapılandırmasını oluştur
+        shell: powershell
+        run: |
+          $json = @"
+          {
+            "ConnectionStrings": {
+              "DefaultConnection": "Host=localhost;Port=5432;Database=kademeli_egitim;Username=postgres;Password=ci_test_password"
+            },
+            "DatabaseSettings": {
+              "Provider": "PostgreSQL",
+              "Version": "18",
+              "CommandTimeoutSeconds": 30
+            },
+            "KademeAyarlari": {
+              "KolayOrtaGecisBaraji": 70,
+              "OrtaZorGecisBaraji": 75,
+              "AraSinavSoruSayisi": 5
+            }
+          }
+          "@
+          $json | Out-File -FilePath "appsettings.json" -Encoding utf8
+
       - name: Bağımlılıkları geri yükle
         run: dotnet restore tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
 
@@ -30,6 +128,8 @@ jobs:
         run: dotnet build KademeliEgitimPlatformu.csproj -c Release --no-restore
 
       - name: Testleri çalıştır
+        env:
+          KEP_POSTGRES_CONNECTION: "Host=localhost;Port=5432;Database=kademeli_egitim;Username=postgres;Password=ci_test_password"
         run: dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj -c Release --logger "trx;LogFileName=test-results.trx"
 
       - name: Test sonuçlarını yükle
