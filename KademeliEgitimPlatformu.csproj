@@ -24,6 +24,9 @@
   <ItemGroup>
     <!-- Öğrenci bilgisayarlarına düz metin soru dosyası kopyalanmaz.
          Yayın çıktısında yalnızca AES-256-GCM ile şifrelenmiş Sorular.dat bulunur. -->
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="Data\Sorular.dat">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -33,8 +36,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="BCrypt.Net-Next" Version="4.2.0" />
+    <PackageReference Include="ClosedXML" Version="0.105.1" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.14" />
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
 </Project>
