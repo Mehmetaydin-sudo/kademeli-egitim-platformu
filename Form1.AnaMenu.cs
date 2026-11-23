@@ -12,12 +12,15 @@ namespace KademeliEgitimPlatformu
         // ==================== 1. ANA MENÜ ====================
         private void AnaMenuyuCiz()
         {
+            TemaPaleti tema = AktifTema;
+            Color ikincilYazi = TemaIkincilYaziRengi(tema);
+
             // Çok sayıda kontrol eklenirken ara yerleşim hesaplarını engeller.
             _pnlAnaMenu.SuspendLayout();
             PanelTemizle(_pnlAnaMenu);
             _pnlAnaMenu.Dock = DockStyle.Fill;
             _pnlAnaMenu.Padding = new Padding(40, 28, 40, 28);
-            _pnlAnaMenu.BackColor = Color.FromArgb(15, 23, 42);
+            _pnlAnaMenu.BackColor = tema.ArkaPlan;
 
             TableLayoutPanel anaIzgara = new()
             {
@@ -37,9 +40,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "Kademeli Eğitim Platformu",
                 Font = FontOnbellegi.Al("Segoe UI", 20, FontStyle.Bold),
-                ForeColor = Color.White,
+                ForeColor = tema.Yazi,
                 Dock = DockStyle.Left,
-                AutoSize = true
+                AutoSize = true,
+                Tag = "TemaYazi"
             };
 
             Button btnUsbPaketYukle = new()
@@ -85,9 +89,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = $"Eğitim Modülleri   •   PostgreSQL Soru Havuzu: {soruSayisi} Soru   •   🔑 İpucu Jetonu: {_ipucuJetonu}",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(148, 163, 184),
+                ForeColor = ikincilYazi,
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.BottomLeft
+                TextAlign = ContentAlignment.BottomLeft,
+                Tag = "TemaIkincilYazi"
             };
 
             TableLayoutPanel modullerIzgara = new()
@@ -109,9 +114,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "Zorluk Seviyesi Seçimi ve Kademeli Geçiş Kuralları",
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(148, 163, 184),
+                ForeColor = ikincilYazi,
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.BottomLeft
+                TextAlign = ContentAlignment.BottomLeft,
+                Tag = "TemaIkincilYazi"
             };
 
             TableLayoutPanel zorlukIzgara = new()
@@ -209,7 +215,11 @@ namespace KademeliEgitimPlatformu
 
         private Panel ModulKartiOlustur(string baslik, string aciklama, int ilerlemeYuzdesi, bool araSinavGecti, Color vurguRengi, DisiplinTuru disiplin)
         {
-            Panel kart = CerceveliPanelOlustur(vurguRengi, Color.FromArgb(22, 32, 50), 2);
+            TemaPaleti tema = AktifTema;
+            Color ikincilYazi = TemaIkincilYaziRengi(tema);
+
+            Panel kart = CerceveliPanelOlustur(vurguRengi, tema.Kart, 2);
+            kart.Tag = "TemaKart";
             kart.Margin = new Padding(10);
             kart.Padding = new Padding(22);
 
@@ -230,16 +240,18 @@ namespace KademeliEgitimPlatformu
             {
                 Text = baslik,
                 Font = FontOnbellegi.Al("Segoe UI", 14.5f, FontStyle.Bold),
-                ForeColor = Color.White,
-                Dock = DockStyle.Fill
+                ForeColor = tema.Yazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaYazi"
             };
 
             Label lblAciklama = new()
             {
                 Text = aciklama,
                 Font = FontOnbellegi.Al("Segoe UI", 10f),
-                ForeColor = Color.FromArgb(148, 163, 184),
-                Dock = DockStyle.Fill
+                ForeColor = ikincilYazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaIkincilYazi"
             };
 
             Label lblGelisim = new()
@@ -318,7 +330,11 @@ namespace KademeliEgitimPlatformu
 
         private Panel ZorlukBilgiKarti(string baslik, string rozetMetin, string altMetin, Color renk, Action? tiklama = null)
         {
-            Panel p = CerceveliPanelOlustur(renk, Color.FromArgb(22, 32, 50), 1);
+            TemaPaleti tema = AktifTema;
+            Color ikincilYazi = TemaIkincilYaziRengi(tema);
+
+            Panel p = CerceveliPanelOlustur(renk, tema.Kart, 1);
+            p.Tag = "TemaKart";
             p.Margin = new Padding(10);
             p.Padding = new Padding(18);
 
@@ -327,7 +343,7 @@ namespace KademeliEgitimPlatformu
                 Text = $" {rozetMetin} ",
                 Font = FontOnbellegi.Al("Segoe UI", 9f, FontStyle.Bold),
                 ForeColor = renk,
-                BackColor = Color.FromArgb(15, 23, 42),
+                BackColor = tema.ArkaPlan,
                 Dock = DockStyle.Right,
                 AutoSize = true,
                 Padding = new Padding(6, 4, 6, 4)
@@ -337,17 +353,19 @@ namespace KademeliEgitimPlatformu
             {
                 Text = baslik,
                 Font = FontOnbellegi.Al("Segoe UI", 12f, FontStyle.Bold),
-                ForeColor = Color.White,
+                ForeColor = tema.Yazi,
                 Dock = DockStyle.Top,
-                Height = 32
+                Height = 32,
+                Tag = "TemaYazi"
             };
 
             Label l2 = new()
             {
                 Text = altMetin,
                 Font = FontOnbellegi.Al("Segoe UI", 10f),
-                ForeColor = Color.FromArgb(148, 163, 184),
-                Dock = DockStyle.Fill
+                ForeColor = ikincilYazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaIkincilYazi"
             };
 
             if (tiklama != null)

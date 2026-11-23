@@ -14,11 +14,15 @@ namespace KademeliEgitimPlatformu
         // ==================== 2. SINAV EKRANI ====================
         private void SinavEkraniniCiz()
         {
+            TemaPaleti tema = AktifTema;
+            Color ikincilYazi = TemaIkincilYaziRengi(tema);
+            bool acikTema = KisisellestirmeServisi.ParlakMi(tema.ArkaPlan);
+
             _pnlSinavEkrani.SuspendLayout();
             PanelTemizle(_pnlSinavEkrani);
             _pnlSinavEkrani.Dock = DockStyle.Fill;
             _pnlSinavEkrani.Padding = new Padding(45, 25, 45, 25);
-            _pnlSinavEkrani.BackColor = Color.FromArgb(15, 23, 42);
+            _pnlSinavEkrani.BackColor = tema.ArkaPlan;
 
             TableLayoutPanel sinavIzgara = new()
             {
@@ -38,18 +42,20 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "Görsel Programlama — Orta Mod",
                 Font = FontOnbellegi.Al("Segoe UI", 17, FontStyle.Bold),
-                ForeColor = Color.White,
+                ForeColor = tema.Yazi,
                 Dock = DockStyle.Top,
-                AutoSize = true
+                AutoSize = true,
+                Tag = "TemaYazi"
             };
 
             _lblSoruSayaci = new()
             {
                 Text = "Soru 1 / 3",
                 Font = FontOnbellegi.Al("Segoe UI", 11.5f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(56, 189, 248),
+                ForeColor = tema.Vurgu,
                 Dock = DockStyle.Bottom,
-                AutoSize = true
+                AutoSize = true,
+                Tag = "TemaVurgu"
             };
 
             Button btnAnaMenuyeDon = new()
@@ -70,17 +76,18 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "⏱️ 00:00   ",
                 Font = FontOnbellegi.Al("Segoe UI", 12f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(148, 163, 184),
+                ForeColor = ikincilYazi,
                 Dock = DockStyle.Right,
                 TextAlign = ContentAlignment.MiddleRight,
-                AutoSize = true
+                AutoSize = true,
+                Tag = "TemaIkincilYazi"
             };
 
             _lblJetonSayaci = new()
             {
                 Text = $"🔑 İpucu Jetonu: {_ipucuJetonu}   ",
                 Font = FontOnbellegi.Al("Segoe UI", 12f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(250, 204, 21),
+                ForeColor = acikTema ? Color.FromArgb(180, 83, 9) : Color.FromArgb(250, 204, 21),
                 Dock = DockStyle.Right,
                 TextAlign = ContentAlignment.MiddleRight,
                 AutoSize = true
@@ -95,9 +102,10 @@ namespace KademeliEgitimPlatformu
             _lblSoruMetni = new()
             {
                 Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(241, 245, 249),
+                ForeColor = tema.Yazi,
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleLeft
+                TextAlign = ContentAlignment.MiddleLeft,
+                Tag = "TemaYazi"
             };
 
             Panel pnlKodKapsayici = CerceveliPanelOlustur(Color.FromArgb(51, 65, 85), Color.FromArgb(9, 13, 22), 1);
@@ -585,28 +593,31 @@ namespace KademeliEgitimPlatformu
             // Yanlış cevapları hata karnesi için kalıcı kaydet (rapor hatası sınavı engellemez).
             YanlislariKarneyeKaydet();
 
-            // Profil, XP, günlük görev ve son aktiviteleri gerçek sınav sonucuyla güncelle.
-            string dersKodu = _aktifSinavDisiplini switch
+            // Profil, XP, günlük görev ve son aktiviteleri kaydet (toast bildirimi sonuç kutusu kapandıktan sonra gösterilir).
+            void ProfilEtkinliginiTamamla()
             {
-                DisiplinTuru.GorselProgramlama => "GORSEL",
-                DisiplinTuru.VeriTabanlari => "SQL",
-                DisiplinTuru.SiberGuvenlik => "SIBER",
-                _ => "KARMA"
-            };
-            string sinavEtiket = _aktifSinavTuru switch
-            {
-                SinavTuru.AraSinav => "Modül ara sınavı tamamlandı",
-                SinavTuru.KolayOrtaGecisSinavi => "Kolay → Orta geçiş sınavı tamamlandı",
-                SinavTuru.OrtaZorGecisSinavi => "Orta → Zor geçiş sınavı tamamlandı",
-                _ => "Değerlendirme sınavı tamamlandı"
-            };
-            int kazanilanXp = (dogru * 10) + (basariYuzdesi >= 70 ? 25 : 5);
-            OyunEtkinligiKaydet(
-                string.Empty,
-                $"{sinavEtiket} (%{basariYuzdesi})",
-                kazanilanXp,
-                cozulenSoruSayisi: toplam,
-                dersKodu: dersKodu);
+                string dersKodu = _aktifSinavDisiplini switch
+                {
+                    DisiplinTuru.GorselProgramlama => "GORSEL",
+                    DisiplinTuru.VeriTabanlari => "SQL",
+                    DisiplinTuru.SiberGuvenlik => "SIBER",
+                    _ => "KARMA"
+                };
+                string sinavEtiket = _aktifSinavTuru switch
+                {
+                    SinavTuru.AraSinav => "Modül ara sınavı tamamlandı",
+                    SinavTuru.KolayOrtaGecisSinavi => "Kolay → Orta geçiş sınavı tamamlandı",
+                    SinavTuru.OrtaZorGecisSinavi => "Orta → Zor geçiş sınavı tamamlandı",
+                    _ => "Değerlendirme sınavı tamamlandı"
+                };
+                int kazanilanXp = (dogru * 10) + (basariYuzdesi >= 70 ? 25 : 5);
+                OyunEtkinligiKaydet(
+                    string.Empty,
+                    $"{sinavEtiket} (%{basariYuzdesi})",
+                    kazanilanXp,
+                    cozulenSoruSayisi: toplam,
+                    dersKodu: dersKodu);
+            }
 
             if (_aktifSinavTuru == SinavTuru.AraSinav)
             {
@@ -647,6 +658,7 @@ namespace KademeliEgitimPlatformu
                     MessageBoxIcon.Information);
 
                 EkranDegistir("ANA");
+                ProfilEtkinliginiTamamla();
                 return;
             }
 
@@ -689,6 +701,7 @@ namespace KademeliEgitimPlatformu
                     MessageBoxIcon.Information);
 
                 EkranDegistir("ANA");
+                ProfilEtkinliginiTamamla();
                 return;
             }
 
@@ -734,6 +747,7 @@ namespace KademeliEgitimPlatformu
                     MessageBoxIcon.Information);
 
                 EkranDegistir("ANA");
+                ProfilEtkinliginiTamamla();
                 return;
             }
 
@@ -783,6 +797,7 @@ namespace KademeliEgitimPlatformu
                 MessageBoxIcon.Information);
 
             EkranDegistir("ANA");
+            ProfilEtkinliginiTamamla();
         }
 
         /// <summary>Oturumdaki yanlış cevapları kalıcı hata karnesine yazar.</summary>

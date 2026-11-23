@@ -37,6 +37,9 @@ namespace KademeliEgitimPlatformu
         // ==================== 3. SİMÜLATÖR + HATA KARNESİ ====================
         private void SimulatorEkraniniCiz()
         {
+            TemaPaleti tema = AktifTema;
+            Color ikincilYazi = TemaIkincilYaziRengi(tema);
+
             // Yeniden çizimden önce kullanıcının yazdığı kodu ve sonucu sakla.
             if (!string.IsNullOrWhiteSpace(_txtSimulatorKod.Text))
                 _simulatorKodOnbellek = _txtSimulatorKod.Text;
@@ -45,7 +48,7 @@ namespace KademeliEgitimPlatformu
             PanelTemizle(_pnlSimulatorVeKarne);
             _pnlSimulatorVeKarne.Dock = DockStyle.Fill;
             _pnlSimulatorVeKarne.Padding = new Padding(40, 28, 40, 28);
-            _pnlSimulatorVeKarne.BackColor = Color.FromArgb(15, 23, 42);
+            _pnlSimulatorVeKarne.BackColor = tema.ArkaPlan;
 
             TableLayoutPanel simAnaIzgara = new()
             {
@@ -61,9 +64,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "🛠️ Gömülü Kod Simülatörü ve Çevrimdışı Hata Karnesi",
                 Font = FontOnbellegi.Al("Segoe UI", 19, FontStyle.Bold),
-                ForeColor = Color.White,
+                ForeColor = tema.Yazi,
                 Dock = DockStyle.Left,
-                AutoSize = true
+                AutoSize = true,
+                Tag = "TemaYazi"
             };
 
             Button btnGeri = new()
@@ -92,7 +96,8 @@ namespace KademeliEgitimPlatformu
             govdeIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45F));
 
             // SOL PANEL: Roslyn destekli canlı editör
-            Panel pnlSol = CerceveliPanelOlustur(Color.FromArgb(56, 189, 248), Color.FromArgb(22, 32, 50), 1);
+            Panel pnlSol = CerceveliPanelOlustur(Color.FromArgb(56, 189, 248), tema.Kart, 1);
+            pnlSol.Tag = "TemaKart";
             pnlSol.Margin = new Padding(0, 8, 12, 0);
             pnlSol.Padding = new Padding(22);
 
@@ -112,8 +117,9 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "Zor Mod — Gizli Syntax Tuzağı Analizi (Roslyn Derleyicisi)",
                 Font = FontOnbellegi.Al("Segoe UI", 13.5f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(56, 189, 248),
-                Dock = DockStyle.Fill
+                ForeColor = tema.Vurgu,
+                Dock = DockStyle.Fill,
+                Tag = "TemaVurgu"
             };
 
             Label lblSimYonerge = new()
@@ -121,8 +127,9 @@ namespace KademeliEgitimPlatformu
                 Text = "Aşağıdaki C# kodundaki gizli sözdizimi/mantık tuzaklarını düzeltip 'Kontrolcüyü Çalıştır' butonuna basın. " +
                        "Kod gerçek Roslyn derleyicisiyle, tamamen çevrimdışı denetlenir.",
                 Font = FontOnbellegi.Al("Segoe UI", 10f),
-                ForeColor = Color.FromArgb(203, 213, 225),
-                Dock = DockStyle.Fill
+                ForeColor = ikincilYazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaIkincilYazi"
             };
 
             _txtSimulatorKod = new RichTextBox
@@ -181,7 +188,8 @@ namespace KademeliEgitimPlatformu
             pnlSol.Controls.Add(solIzgara);
 
             // SAĞ PANEL: Hata karnesi ve rozetler
-            Panel pnlSag = CerceveliPanelOlustur(Color.FromArgb(139, 92, 246), Color.FromArgb(22, 32, 50), 1);
+            Panel pnlSag = CerceveliPanelOlustur(Color.FromArgb(139, 92, 246), tema.Kart, 1);
+            pnlSag.Tag = "TemaKart";
             pnlSag.Margin = new Padding(12, 8, 0, 0);
             pnlSag.Padding = new Padding(22);
 
@@ -203,8 +211,9 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "📊 Çevrimdışı Hata Karnesi & Beceri Düzeyleri",
                 Font = FontOnbellegi.Al("Segoe UI", 13.5f, FontStyle.Bold),
-                ForeColor = Color.White,
-                Dock = DockStyle.Fill
+                ForeColor = tema.Yazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaYazi"
             };
 
             _lblSimBeceriGorsel = new Label
@@ -235,8 +244,9 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "🏆 Kazanılan Yerel Oyunlaştırma Rozetleri",
                 Font = FontOnbellegi.Al("Segoe UI", 13.5f, FontStyle.Bold),
-                ForeColor = Color.White,
-                Dock = DockStyle.Fill
+                ForeColor = tema.Yazi,
+                Dock = DockStyle.Fill,
+                Tag = "TemaYazi"
             };
 
             TableLayoutPanel rozetIzgara = new()
@@ -302,15 +312,17 @@ namespace KademeliEgitimPlatformu
 
         private Panel RozetKarti(string ad, string aciklama, Color renk)
         {
-            Panel p = CerceveliPanelOlustur(renk, Color.FromArgb(15, 23, 42), 1);
+            TemaPaleti tema = AktifTema;
+            Panel p = CerceveliPanelOlustur(renk, tema.ArkaPlan, 1);
             p.Margin = new Padding(6);
             p.Padding = new Padding(12);
             Label l2 = new()
             {
                 Text = aciklama,
                 Font = FontOnbellegi.Al("Segoe UI", 9.5f),
-                ForeColor = Color.FromArgb(203, 213, 225),
-                Dock = DockStyle.Fill
+                ForeColor = TemaIkincilYaziRengi(tema),
+                Dock = DockStyle.Fill,
+                Tag = "TemaIkincilYazi"
             };
             Label l1 = new()
             {
