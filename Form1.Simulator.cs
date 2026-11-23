@@ -358,6 +358,13 @@ namespace KademeliEgitimPlatformu
                         _simulatorSonucOnbellek +=
                             "\n\n🏆 'Hata Avcısı' rozeti kazanıldı! Siber Güvenlik yetkinliğine +25 puan eklendi.";
                     }
+
+                    OyunEtkinligiKaydet(
+                        string.Empty,
+                        "Kod Simülatörü görevi hatasız derlendi",
+                        kazanilanXp: 35,
+                        cozulenSoruSayisi: 1,
+                        dersKodu: "SIM");
                 }
                 else
                 {

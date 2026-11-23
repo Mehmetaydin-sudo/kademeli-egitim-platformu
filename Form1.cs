@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.8.2";
+        private const string Surum = "v0.8.3";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
@@ -113,6 +113,7 @@ namespace KademeliEgitimPlatformu
                 _lblSureSayaci.Text = $"⏱️ {dk:00}:{sn:00}   ";
             };
             ArayuzuOlustur();
+            KisisellestirmeModulunuBagla();
         }
 
         private void KaliciIlerlemeyiYukle()
@@ -181,6 +182,7 @@ namespace KademeliEgitimPlatformu
         {
             _sinavTimer.Stop();
             _sinavTimer.Dispose();
+            KisisellestirmeTemizle();
             base.OnFormClosed(e);
         }
 
@@ -276,6 +278,7 @@ namespace KademeliEgitimPlatformu
             _btnMenuAna = SidebarButonu("🏠  Kontrol Paneli", () => EkranDegistir("ANA"));
             _btnMenuSinav = SidebarButonu("📝  Karma Sınav", () => SinaviBaslat(null, null, "Karma Değerlendirme Sınavı — Tüm Disiplinler"));
             _btnMenuSimulator = SidebarButonu("🛠️  Kod Simülatörü", SimulatoruAc);
+            _btnMenuKisisellestirme = SidebarButonu("🎨  Profil ve Rozetler", () => EkranDegistir("PROFIL"));
 
             Label lblAltBilgi = new()
             {
@@ -286,6 +289,7 @@ namespace KademeliEgitimPlatformu
                 Height = 95
             };
 
+            _pnlSidebar.Controls.Add(_btnMenuKisisellestirme);
             _pnlSidebar.Controls.Add(_btnMenuSimulator);
             _pnlSidebar.Controls.Add(_btnMenuSinav);
             _pnlSidebar.Controls.Add(_btnMenuAna);
@@ -323,11 +327,15 @@ namespace KademeliEgitimPlatformu
             ZorModuAc();
         }
 
+        private string _aktifEkranKodu = "ANA";
+
         private void EkranDegistir(string ekranKodu)
         {
+            _aktifEkranKodu = ekranKodu;
             _pnlAnaMenu.Visible = ekranKodu == "ANA";
             _pnlSinavEkrani.Visible = ekranKodu == "SINAV";
             _pnlSimulatorVeKarne.Visible = ekranKodu == "SIM";
+            _pnlKisisellestirme.Visible = ekranKodu == "PROFIL";
 
             if (ekranKodu != "SINAV") _sinavTimer.Stop();
 
@@ -355,14 +363,34 @@ namespace KademeliEgitimPlatformu
                 }
             }
 
-            _btnMenuAna.BackColor = ekranKodu == "ANA" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
-            _btnMenuAna.ForeColor = ekranKodu == "ANA" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
+            if (ekranKodu == "PROFIL")
+            {
+                _pnlKisisellestirme.AutoScrollPosition = new Point(0, 0);
+                TumProfilVerileriniYenile();
+            }
 
-            _btnMenuSinav.BackColor = ekranKodu == "SINAV" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
-            _btnMenuSinav.ForeColor = ekranKodu == "SINAV" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
+            SidebarAktifButonlariniGuncelle(ekranKodu);
+        }
 
-            _btnMenuSimulator.BackColor = ekranKodu == "SIM" ? Color.FromArgb(30, 41, 59) : Color.FromArgb(9, 13, 24);
-            _btnMenuSimulator.ForeColor = ekranKodu == "SIM" ? Color.FromArgb(56, 189, 248) : Color.FromArgb(203, 213, 225);
+        private void SidebarAktifButonlariniGuncelle(string ekranKodu)
+        {
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            Color aktifArka = tema.Kart;
+            Color pasifArka = tema.Sidebar;
+            Color aktifYazi = tema.Vurgu;
+            Color pasifYazi = tema.Yazi;
+
+            _btnMenuAna.BackColor = ekranKodu == "ANA" ? aktifArka : pasifArka;
+            _btnMenuAna.ForeColor = ekranKodu == "ANA" ? aktifYazi : pasifYazi;
+
+            _btnMenuSinav.BackColor = ekranKodu == "SINAV" ? aktifArka : pasifArka;
+            _btnMenuSinav.ForeColor = ekranKodu == "SINAV" ? aktifYazi : pasifYazi;
+
+            _btnMenuSimulator.BackColor = ekranKodu == "SIM" ? aktifArka : pasifArka;
+            _btnMenuSimulator.ForeColor = ekranKodu == "SIM" ? aktifYazi : pasifYazi;
+
+            _btnMenuKisisellestirme.BackColor = ekranKodu == "PROFIL" ? aktifArka : pasifArka;
+            _btnMenuKisisellestirme.ForeColor = ekranKodu == "PROFIL" ? aktifYazi : pasifYazi;
         }
 
         private Panel CerceveliPanelOlustur(Color cerceveRengi, Color arkaPlan, int kalinlik = 1)
