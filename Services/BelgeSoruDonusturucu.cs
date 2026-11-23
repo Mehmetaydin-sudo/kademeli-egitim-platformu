@@ -113,7 +113,7 @@ namespace KademeliEgitimPlatformu.Services
         private const long MaksBelgeBoyutu = 10 * 1024 * 1024; // 10 MB
 
         private static readonly Regex TopluCevapBaslikDeseni = new(
-            @"^\s*(?:CEVAP\s+ANAHTARI|YANIT\s+ANAHTARI|DO[ĞG]RU\s+CEVAPLAR|CEVAPLAR)\s*[:\-–—]?\s*(.*)$",
+            @"^\s*(?:CEVAP\s+ANAHTAR[Iıİi]|YAN[Iıİi]T\s+ANAHTAR[Iıİi]|DO[ĞğGg]RU\s+CEVAPLAR|CEVAPLAR)\s*[:\-–—]?\s*(.*)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex TopluCevapCiftDeseni = new(
@@ -125,8 +125,8 @@ namespace KademeliEgitimPlatformu.Services
             RegexOptions.Compiled);
 
         private static readonly Regex SoruBaslangicDeseni = new(
-            @"^\s*(?:(?:Soru|SORU)\s*[-#:]?\s*(\d{1,4})\s*[:\.\)\-–—]?\s*(.*)|(\d{1,4})\s*[\.\)]\s*(?:(?:Soru|SORU)\s*[:\-]?\s*)?(.*))$",
-            RegexOptions.Compiled);
+            @"^\s*(?:Soru\s*[-#:]?\s*(\d{1,4})\s*[:\.\)\-–—]?\s*(.*)|(\d{1,4})\s*[\.\)]\s*(?:Soru\s*[:\-]?\s*)?(.*))$",
+            RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex SikSatirBaslangicDeseni = new(
             @"^\s*(?:\(([A-Ea-e])\)|([A-Ea-e])\s*[\)\.\:])\s*(.*)$",
@@ -137,27 +137,27 @@ namespace KademeliEgitimPlatformu.Services
             RegexOptions.Compiled);
 
         private static readonly Regex CevapSatiriDeseni = new(
-            @"^\s*(?:Do[ğg]ru\s+)?(?:Cevap|Yan[ıiİI]t|[ŞS][ıiİI]k)\s*[:\-=]\s*(.+)$",
+            @"^\s*(?:Do[ğĞgG]ru\s+)?(?:Cevap|Yan[ıiİI]t|[ŞşSs][ıiİI]k)\s*[:\-=]\s*(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex ZorlukSatiriDeseni = new(
-            @"^\s*(?:Zorluk(?:\s+Seviyesi)?|Seviye)\s*[:\-=]\s*(.+)$",
+            @"^\s*(?:Zorluk(?:\s+Sev[ıiİI]yes[ıiİI])?|Sev[ıiİI]ye)\s*[:\-=]\s*(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex ModulSatiriDeseni = new(
-            @"^\s*(?:Mod[üuÜU]l|Disiplin|Ders|Kategori)\s*[:\-=]\s*(.+)$",
+            @"^\s*(?:Mod[üuÜU]l|D[ıiİI]s[ıiİI]pl[ıiİI]n|Ders|Kategor[ıiİI])\s*[:\-=]\s*(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex EtiketSatiriDeseni = new(
-            @"^\s*Etiket\s*[:\-=]\s*(.+)$",
+            @"^\s*Et[ıiİI]ket\s*[:\-=]\s*(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex KodSatiriDeseni = new(
-            @"^\s*(?:Kod(?:\s+Blo[ğg]u)?)\s*[:\-=]\s*(.*)$",
+            @"^\s*(?:Kod(?:\s+Blo[ğĞgG]u)?)\s*[:\-=]\s*(.*)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex SikBazliAciklamaDeseni = new(
-            @"^\s*(?:(?:A[çcÇC][ıiİI]klama|Neden\s+Yanl[ıiİI][şsŞS])\s*\(?([A-Da-d])\)?|([A-Da-d])\s*(?:[ŞS][ıiİI]kk?[ıiİI]?\s*)?(?:A[çcÇC][ıiİI]klama|Neden\s+Yanl[ıiİI][şsŞS]))\s*[:\-=]\s*(.+)$",
+            @"^\s*(?:(?:A[çcÇC][ıiİI]klama|Neden\s+Yanl[ıiİI][şsŞS])\s*\(?([A-Da-d])\)?|([A-Da-d])\s*(?:[ŞşSs][ıiİI]kk?[ıiİI]?\s*)?(?:A[çcÇC][ıiİI]klama|Neden\s+Yanl[ıiİI][şsŞS]))\s*[:\-=]\s*(.+)$",
             RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
         private static readonly Regex GenelAciklamaDeseni = new(
