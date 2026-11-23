@@ -177,6 +177,7 @@ namespace KademeliEgitimPlatformu.Services
         public int SorulariVeritabaninaAktar(IEnumerable<Soru> yeniSorular, bool mevcutlariGuncelle = false)
         {
             ArgumentNullException.ThrowIfNull(yeniSorular);
+            SonPaketAtlananSayisi = 0;
 
             int eklenen = 0;
             using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
@@ -292,7 +293,9 @@ namespace KademeliEgitimPlatformu.Services
         {
             try
             {
-                using var kitap = new XLWorkbook(dosyaYolu);
+                // Dosya Excel içinde açık olsa bile salt-okunur olarak okunabilsin.
+                using var akis = new FileStream(dosyaYolu, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                using var kitap = new XLWorkbook(akis);
                 IXLWorksheet? sayfa = kitap.Worksheets.FirstOrDefault();
                 if (sayfa == null)
                     return new List<Soru>();
@@ -373,7 +376,7 @@ namespace KademeliEgitimPlatformu.Services
 
         private static List<Soru> CsvdenOku(string dosyaYolu)
         {
-            string icerik = File.ReadAllText(dosyaYolu, Encoding.UTF8);
+            string icerik = MetniTurkceUyumluOku(dosyaYolu);
             List<string[]> satirlar = CsvAyristir(icerik);
             if (satirlar.Count <= 1)
                 return new List<Soru>();
@@ -515,6 +518,36 @@ namespace KademeliEgitimPlatformu.Services
             }
 
             return satirlar;
+        }
+
+        private static string MetniTurkceUyumluOku(string dosyaYolu)
+        {
+            byte[] baytlar;
+            using (var akis = new FileStream(dosyaYolu, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+            using (var bellek = new MemoryStream())
+            {
+                akis.CopyTo(bellek);
+                baytlar = bellek.ToArray();
+            }
+
+            if (baytlar.Length == 0)
+                return string.Empty;
+
+            // UTF-8 BOM varsa doğrudan UTF-8 çöz.
+            if (baytlar.Length >= 3 && baytlar[0] == 0xEF && baytlar[1] == 0xBB && baytlar[2] == 0xBF)
+                return Encoding.UTF8.GetString(baytlar, 3, baytlar.Length - 3);
+
+            // Önce katı UTF-8 doğrula; geçersiz bayt varsa Türkçe Windows Excel ANSI (Windows-1254) ile çöz.
+            try
+            {
+                return new UTF8Encoding(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true)
+                    .GetString(baytlar);
+            }
+            catch (DecoderFallbackException)
+            {
+                Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+                return Encoding.GetEncoding(1254).GetString(baytlar);
+            }
         }
 
         private static string DegerAl(string[] dizi, int index) =>

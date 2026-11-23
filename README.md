@@ -165,7 +165,8 @@ KademeliEgitimPlatformu/
 
 ## 📌 Sürüm Özeti (Changelog)
 
-* **v0.8.1 (Güncel):** Genel amaçlı **Kademeli Eğitim Platformu** konumlandırması; çevrimdışı Word (`.docx`) ve PDF (`.pdf`) soru dönüştürücü (`BelgeSoruDonusturucu`), merkezi `SoruDogrulayici`, kayıt öncesi önizleme ekranı (`BelgeOnizlemeFormu`), otomatik PostgreSQL şema kontrolü ve güvenli dosya yolu yönetimi.
+* **v0.8.2 (Güncel):** Genel sağlık kontrolü ve kararlılık iyileştirmeleri — `.docx`/`.pdf`/`.xlsx`/`.csv` içe aktarma ve önizleme modül değişiminde asenkron (`Task.Run`) işleme ile UI donma koruması, Türkçe Windows Excel ANSI (`Windows-1254`) `.csv` otomatik kodlama tespiti ve açık dosya (`FileShare.ReadWrite`) desteği, taranmış/boş PDF ile veri satırsız Word tablosu uyarıları, karne dışa aktarma hata yönetimi ve 75/75 xUnit regresyon testi.
+* **v0.8.1:** Genel amaçlı **Kademeli Eğitim Platformu** konumlandırması; çevrimdışı Word (`.docx`) ve PDF (`.pdf`) soru dönüştürücü (`BelgeSoruDonusturucu`), merkezi `SoruDogrulayici`, kayıt öncesi önizleme ekranı (`BelgeOnizlemeFormu`), otomatik PostgreSQL şema kontrolü ve güvenli dosya yolu yönetimi.
 * **v0.8.0:** Yerel PostgreSQL 18 (`Npgsql`), `BCrypt.Net-Next` tuzlu parola güvenliği, `ClosedXML` (`.xlsx`/`.csv`) veri aktarımı ve Seviye Geçiş Ara Sınavı sistemi.
 * **v0.1.0 – v0.7.0:** WinForms (.NET 8) çekirdek arayüzü, kademeli zorluk kuralları, "Neden Yanlış?" pedagojik açıklamaları, hata karnesi ve xUnit test altyapısı.
 

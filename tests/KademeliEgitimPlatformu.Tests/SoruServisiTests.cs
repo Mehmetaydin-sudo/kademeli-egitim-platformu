@@ -180,6 +180,33 @@ namespace KademeliEgitimPlatformu.Tests
         }
 
         [Fact]
+        public void TurkceWindows1254Csv_BozulmadanOkunurVeDogrulanir()
+        {
+            string klasor = Path.Combine(Path.GetTempPath(), "kademeli-cp1254-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(klasor);
+
+            try
+            {
+                string csvYolu = Path.Combine(klasor, "turkce_ansi.csv");
+                string ciktiXlsx = Path.Combine(klasor, "dogrulanmis.xlsx");
+                string icerik =
+                    "Disiplin,Zorluk,Etiket,Baslik,KodBlogu,SecenekA,SecenekB,SecenekC,SecenekD,DogruSecenekIndex,AciklamaA,AciklamaB,AciklamaC,AciklamaD\r\n" +
+                    "SiberGuvenlik,Orta,,\"Şifreleme ve güvenlik ölçümü nedir?\",,\"Çözüm A\",\"Öğrenim B\",\"İşlem C\",\"Güncel D\",1,\"Yanlış A\",,\"Yanlış C\",\"Yanlış D\"\r\n";
+
+                System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
+                File.WriteAllBytes(csvYolu, System.Text.Encoding.GetEncoding(1254).GetBytes(icerik));
+
+                int adet = SoruServisi.PaketOlustur(csvYolu, ciktiXlsx);
+                Assert.Equal(1, adet);
+                Assert.True(File.Exists(ciktiXlsx));
+            }
+            finally
+            {
+                try { Directory.Delete(klasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
         public void KullaniciDostuHataMesaji_BaglantiVeJsonHatalariniTurkceAciklar()
         {
             string baglantiMesaji = VeritabaniBaglantisi.KullaniciDostuHataMesaji(
