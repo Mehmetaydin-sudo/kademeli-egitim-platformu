@@ -44,11 +44,12 @@ namespace KademeliEgitimPlatformu.Services
             if (!string.IsNullOrWhiteSpace(ortamBaglantisi))
                 return ortamBaglantisi;
 
+            string kullaniciAyarDosyasi = VeriYolu.KullaniciAyarDosyasiYolu;
             string ayarKlasoru = AyarKlasorunuBul();
             string ayarDosyasi = Path.Combine(ayarKlasoru, "appsettings.json");
             string ornekAyarDosyasi = Path.Combine(ayarKlasoru, "appsettings.example.json");
 
-            if (!File.Exists(ayarDosyasi) && !File.Exists(ornekAyarDosyasi))
+            if (!File.Exists(kullaniciAyarDosyasi) && !File.Exists(ayarDosyasi) && !File.Exists(ornekAyarDosyasi))
             {
                 throw new InvalidOperationException(
                     $"Uygulama dizininde ({AppContext.BaseDirectory}) 'appsettings.json' yapılandırma dosyası bulunamadı. " +
@@ -62,6 +63,9 @@ namespace KademeliEgitimPlatformu.Services
                     .SetBasePath(ayarKlasoru)
                     .AddJsonFile("appsettings.example.json", optional: true, reloadOnChange: false)
                     .AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+
+                if (File.Exists(kullaniciAyarDosyasi))
+                    builder.AddJsonFile(kullaniciAyarDosyasi, optional: true, reloadOnChange: false);
 
                 yapilandirma = builder.Build();
             }
@@ -185,6 +189,128 @@ namespace KademeliEgitimPlatformu.Services
                     baglanti?.Dispose();
                 }
             }
+        }
+
+        /// <summary>
+        /// Girilen PostgreSQL bilgileriyle bağlantıyı test eder; veritabanı veya tablolar
+        /// eksikse otomatik oluşturup şemayı doğrular.
+        /// </summary>
+        public static (bool Basarili, string Mesaj) BaglantiyiTestEt(
+            string host,
+            int port,
+            string veritabani,
+            string kullaniciAdi,
+            string sifre)
+        {
+            try
+            {
+                string dize = BaglantiDizesiOlustur(host, port, veritabani, kullaniciAdi, sifre);
+                TablolariHazirla(dize);
+                using var baglanti = Ac(dize);
+                IReadOnlyList<string> eksikler = EksikTablolariGetir(baglanti);
+                if (eksikler.Count > 0)
+                    return (false, "Bağlantı kuruldu ancak şu tablolar oluşturulamadı: " + string.Join(", ", eksikler));
+
+                return (true, $"PostgreSQL 18 bağlantısı başarılı! '{veritabani}' veritabanı ve tüm tablolar hazır.");
+            }
+            catch (Exception ex)
+            {
+                return (false, KullaniciDostuHataMesaji(ex));
+            }
+        }
+
+        /// <summary>
+        /// Bağlantı ayarlarını kullanıcının yazılabilir Belgelerim\KademeliEgitimPlatformu\appsettings.json
+        /// dosyasına kaydeder (Program Files izin hatasına yol açmaz).
+        /// </summary>
+        public static string BaglantiAyariniKaydet(
+            string host,
+            int port,
+            string veritabani,
+            string kullaniciAdi,
+            string sifre,
+            string? hedefDosyaYolu = null)
+        {
+            string dize = BaglantiDizesiOlustur(host, port, veritabani, kullaniciAdi, sifre);
+            string kayitYolu = string.IsNullOrWhiteSpace(hedefDosyaYolu)
+                ? VeriYolu.KullaniciAyarDosyasiYolu
+                : hedefDosyaYolu;
+
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(kayitYolu));
+            if (!string.IsNullOrEmpty(klasor))
+                Directory.CreateDirectory(klasor);
+
+            var belge = new
+            {
+                ConnectionStrings = new
+                {
+                    DefaultConnection = dize
+                },
+                DatabaseSettings = new
+                {
+                    Provider = "PostgreSQL",
+                    Version = "18",
+                    CommandTimeoutSeconds = 30
+                },
+                KademeAyarlari = new
+                {
+                    KolayOrtaGecisBaraji = 70,
+                    OrtaZorGecisBaraji = 75,
+                    AraSinavSoruSayisi = 5
+                }
+            };
+
+            string json = JsonSerializer.Serialize(belge, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(kayitYolu, json, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+            lock (Kilit)
+            {
+                _semaHazir = false;
+            }
+
+            return kayitYolu;
+        }
+
+        /// <summary>Mevcut yapılandırmadaki bağlantı bileşenlerini okur (hata durumunda güvenli varsayılanlar döner).</summary>
+        public static NpgsqlConnectionStringBuilder MevcutAyarlariOku()
+        {
+            try
+            {
+                string dize = BaglantiDizesiniAl();
+                var kurucu = new NpgsqlConnectionStringBuilder(dize);
+                if (string.Equals(kurucu.Password, "BURAYA_SIFRE_GELECEK", StringComparison.Ordinal))
+                    kurucu.Password = string.Empty;
+                return kurucu;
+            }
+            catch
+            {
+                return new NpgsqlConnectionStringBuilder
+                {
+                    Host = "localhost",
+                    Port = 5432,
+                    Database = "kademeli_egitim",
+                    Username = "postgres",
+                    Password = string.Empty
+                };
+            }
+        }
+
+        public static string BaglantiDizesiOlustur(
+            string host,
+            int port,
+            string veritabani,
+            string kullaniciAdi,
+            string sifre)
+        {
+            var kurucu = new NpgsqlConnectionStringBuilder
+            {
+                Host = string.IsNullOrWhiteSpace(host) ? "localhost" : host.Trim(),
+                Port = port is > 0 and <= 65535 ? port : 5432,
+                Database = string.IsNullOrWhiteSpace(veritabani) ? "kademeli_egitim" : veritabani.Trim(),
+                Username = string.IsNullOrWhiteSpace(kullaniciAdi) ? "postgres" : kullaniciAdi.Trim(),
+                Password = sifre ?? string.Empty
+            };
+            return kurucu.ConnectionString;
         }
 
         /// <summary>

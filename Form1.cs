@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.8.5";
+        private const string Surum = "v0.9.0";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
@@ -45,7 +45,9 @@ namespace KademeliEgitimPlatformu
         private int _mevcutSoruIndex = 0;
         private int _gecenSaniye = 0;
         private DateTime _sinavBaslangic;
+        private bool _sinavDevamEdiyor;
         private System.Windows.Forms.Timer _sinavTimer = new();
+        private readonly ToolTip _ipucuBalonu = new();
 
         // Aktif sınavın türü ve kapsamı (normal sınav / modül ara sınavı).
         private SinavTuru _aktifSinavTuru = SinavTuru.Normal;
@@ -70,6 +72,7 @@ namespace KademeliEgitimPlatformu
         private Button _btnMenuAna = new();
         private Button _btnMenuSinav = new();
         private Button _btnMenuSimulator = new();
+        private Button _btnMenuSoruHavuzu = new();
 
         // 3 Ana Ekran Paneli
         private Panel _pnlAnaMenu = new BufferedPanel();
@@ -81,6 +84,8 @@ namespace KademeliEgitimPlatformu
         private Label _lblSoruSayaci = new();
         private Label _lblSureSayaci = new();
         private Label _lblJetonSayaci = new();
+        private Panel _pnlSinavIlerlemeArka = new();
+        private Panel _pnlSinavIlerlemeDolu = new();
         private Label _lblSoruMetni = new();
         private RichTextBox _txtKodBlogu = new();
         private RichTextBox _lblKodSatirNo = new();
@@ -145,15 +150,44 @@ namespace KademeliEgitimPlatformu
             catch (Exception ex)
             {
                 _veritabaniUyarisiGosterildi = true;
-                // Veritabanı kapalı veya ayarlar hatalı olduğunda uygulama çökmesin,
-                // kullanıcıya anlaşılır Türkçe açıklama gösterip varsayılan değerlerle açılsın.
-                MessageBox.Show(
-                    "Kayıtlı ilerleme okunamadı, varsayılan değerlerle başlanıyor.\n\n" +
-                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
+                // Veritabanı kapalı veya ayarlar hatalı olduğunda uygulama çökmesin;
+                // kullanıcıya anlaşılır Türkçe açıklama ve tek tıkla kurulum sihirbazı sunulsun.
+                DialogResult secim = MessageBox.Show(
+                    "Kayıtlı ilerleme okunamadı.\n\n" +
+                    VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex) +
+                    "\n\nPostgreSQL bağlantı ayarlarını şimdi görsel kurulum ekranından düzenlemek ister misiniz?",
                     "PostgreSQL Bağlantı Uyarısı",
-                    MessageBoxButtons.OK,
+                    MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning);
+
+                if (secim == DialogResult.Yes)
+                {
+                    VeritabaniAyarlariniAc(yenidenYukle: true);
+                }
             }
+        }
+
+        private void VeritabaniAyarlariniAc(bool yenidenYukle = false)
+        {
+            using var ayarFormu = new VeritabaniAyarFormu();
+            if (ayarFormu.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            // Yeni bağlantı bilgileriyle tüm servisleri sıfırdan oluştur.
+            _soruServisi = null;
+            _ilerlemeServisi = null;
+            _karneServisi = null;
+            _veritabaniUyarisiGosterildi = false;
+            _anaMenuKirli = true;
+
+            if (yenidenYukle)
+            {
+                KaliciIlerlemeyiYukle();
+                _aktifTercih = Kisisellestirme.TercihiYukle();
+            }
+
+            if (_pnlAnaMenu.Visible)
+                AnaMenuyuCiz();
         }
 
         private void KaliciIlerlemeyiKaydet()
@@ -188,12 +222,44 @@ namespace KademeliEgitimPlatformu
             _siberAraSinavGecti,
             _ortaModGecti);
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            if (!SinavdanCikisOnayiAl())
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            base.OnFormClosing(e);
+        }
+
         protected override void OnFormClosed(FormClosedEventArgs e)
         {
             _sinavTimer.Stop();
             _sinavTimer.Dispose();
+            _ipucuBalonu.Dispose();
             KisisellestirmeTemizle();
             base.OnFormClosed(e);
+        }
+
+        private bool SinavdanCikisOnayiAl()
+        {
+            if (!_sinavDevamEdiyor || !_pnlSinavEkrani.Visible)
+                return true;
+
+            DialogResult onay = MessageBox.Show(
+                "Devam eden bir sınavınız var. Şimdi çıkarsanız bu oturumdaki cevaplarınız kaydedilmeyecek.\n\n" +
+                "Sınavdan çıkmak istediğinize emin misiniz?",
+                "Sınavdan Çıkış Onayı",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Question);
+
+            if (onay != DialogResult.Yes)
+                return false;
+
+            _sinavDevamEdiyor = false;
+            _sinavTimer.Stop();
+            return true;
         }
 
         /// <summary>1-4 tuşlarıyla şık seçimi, Enter ile sonraki soru.</summary>
@@ -289,6 +355,7 @@ namespace KademeliEgitimPlatformu
             _btnMenuAna = SidebarButonu("🏠  Kontrol Paneli", () => EkranDegistir("ANA"));
             _btnMenuSinav = SidebarButonu("📝  Karma Sınav", () => SinaviBaslat(null, null, "Karma Değerlendirme Sınavı — Tüm Disiplinler"));
             _btnMenuSimulator = SidebarButonu("🛠️  Kod Simülatörü", SimulatoruAc);
+            _btnMenuSoruHavuzu = SidebarButonu("📚  Soru Havuzu", SoruHavuzunuAc);
             _btnMenuKisisellestirme = SidebarButonu("🎨  Profil ve Rozetler", () => EkranDegistir("PROFIL"));
 
             Label lblAltBilgi = new()
@@ -302,6 +369,7 @@ namespace KademeliEgitimPlatformu
             };
 
             _pnlSidebar.Controls.Add(_btnMenuKisisellestirme);
+            _pnlSidebar.Controls.Add(_btnMenuSoruHavuzu);
             _pnlSidebar.Controls.Add(_btnMenuSimulator);
             _pnlSidebar.Controls.Add(_btnMenuSinav);
             _pnlSidebar.Controls.Add(_btnMenuAna);
@@ -336,13 +404,31 @@ namespace KademeliEgitimPlatformu
         /// </summary>
         private void SimulatoruAc()
         {
-            ZorModuAc();
+            ZorModuAc(simulatoruAc: true);
+        }
+
+        private void SoruHavuzunuAc()
+        {
+            if (!SinavdanCikisOnayiAl())
+                return;
+
+            using var yonetim = new SoruHavuzuYonetimFormu(SoruDeposu);
+            yonetim.ShowDialog(this);
+            if (yonetim.DegisiklikYapildi)
+            {
+                _anaMenuKirli = true;
+                if (_aktifEkranKodu == "ANA")
+                    AnaMenuyuCiz();
+            }
         }
 
         private string _aktifEkranKodu = "ANA";
 
         private void EkranDegistir(string ekranKodu)
         {
+            if (ekranKodu != "SINAV" && !SinavdanCikisOnayiAl())
+                return;
+
             _aktifEkranKodu = ekranKodu;
             _pnlAnaMenu.Visible = ekranKodu == "ANA";
             _pnlSinavEkrani.Visible = ekranKodu == "SINAV";
@@ -400,6 +486,9 @@ namespace KademeliEgitimPlatformu
 
             _btnMenuSimulator.BackColor = ekranKodu == "SIM" ? aktifArka : pasifArka;
             _btnMenuSimulator.ForeColor = ekranKodu == "SIM" ? aktifYazi : pasifYazi;
+
+            _btnMenuSoruHavuzu.BackColor = pasifArka;
+            _btnMenuSoruHavuzu.ForeColor = pasifYazi;
 
             _btnMenuKisisellestirme.BackColor = ekranKodu == "PROFIL" ? aktifArka : pasifArka;
             _btnMenuKisisellestirme.ForeColor = ekranKodu == "PROFIL" ? aktifYazi : pasifYazi;

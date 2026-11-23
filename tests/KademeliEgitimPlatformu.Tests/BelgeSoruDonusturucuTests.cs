@@ -332,6 +332,89 @@ Açıklama: Türkçe ç, ğ, ı, İ, ö, ş, ü karakterleri kayıpsız korunmal
         }
 
         [Fact]
+        public void HataliKayit_DuzenlenipYenidenDogrulandiginda_GecerliOlurVeUyariTemizlenir()
+        {
+            string metin = @"
+1. D şıkkı ve doğru cevabı eksik soru?
+A) Birinci
+B) İkinci
+C) Üçüncü
+";
+            BelgeDonusturmeSonucu sonuc = BelgeSoruDonusturucu.MetindenSorulariAyristir(metin, DisiplinTuru.VeriTabanlari);
+            Assert.Single(sonuc.Kayitlar);
+            Assert.False(sonuc.Kayitlar[0].GecerliMi);
+            Assert.NotEmpty(sonuc.Uyarilar);
+
+            // Kullanıcı önizleme penceresinde eksik D şıkkını ve doğru cevabı doldurur
+            sonuc.Kayitlar[0].Soru.Secenekler[3] = "Dördüncü";
+            sonuc.Kayitlar[0].Soru.DogruSecenekIndex = 3;
+            sonuc.Kayitlar[0].YenidenDogrula();
+            sonuc.UyarilariYenile();
+
+            Assert.True(sonuc.Kayitlar[0].GecerliMi);
+            Assert.Equal(1, sonuc.GecerliSayisi);
+            Assert.Equal(0, sonuc.HataliSayisi);
+            Assert.Empty(sonuc.Uyarilar);
+        }
+
+        [Fact]
+        public void SoruDuzenleFormu_EksikSoruIleOlusturulabilir()
+        {
+            Exception? hata = null;
+            string? baslik = null;
+
+            var isParcacigi = new Thread(() =>
+            {
+                try
+                {
+                    var eksikSoru = new Soru
+                    {
+                        Baslik = "Eksik şıklı soru",
+                        Secenekler = new System.Collections.Generic.List<string> { "A", "B", "C", "" },
+                        DogruSecenekIndex = -1
+                    };
+                    using var form = new SoruDuzenleFormu(eksikSoru, soruNo: 2);
+                    baslik = form.Text;
+                }
+                catch (Exception ex)
+                {
+                    hata = ex;
+                }
+            })
+            { IsBackground = true };
+
+            isParcacigi.SetApartmentState(ApartmentState.STA);
+            isParcacigi.Start();
+            Assert.True(isParcacigi.Join(TimeSpan.FromSeconds(15)));
+
+            Assert.Null(hata);
+            Assert.NotNull(baslik);
+            Assert.Contains("Soru 2", baslik);
+        }
+
+        [Fact]
+        public void OrnekWordSablonuOlustur_GecerliKlasikVeTabloSorulariUretir()
+        {
+            string klasor = Path.Combine(Path.GetTempPath(), "kademeli-sablon-docx-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(klasor);
+            string yol = Path.Combine(klasor, "Ornek_Soru_Sablonu.docx");
+
+            try
+            {
+                BelgeSoruDonusturucu.OrnekWordSablonuOlustur(yol);
+                Assert.True(File.Exists(yol));
+
+                BelgeDonusturmeSonucu sonuc = BelgeSoruDonusturucu.DosyadanDonustur(yol);
+                Assert.Equal(3, sonuc.GecerliSayisi);
+                Assert.Equal(0, sonuc.HataliSayisi);
+            }
+            finally
+            {
+                try { Directory.Delete(klasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
         public void BelgeOnizlemeFormu_DocxIleOlusturulabilir()
         {
             string geciciKlasor = Path.Combine(Path.GetTempPath(), "kademeli-ui-" + Guid.NewGuid().ToString("N"));

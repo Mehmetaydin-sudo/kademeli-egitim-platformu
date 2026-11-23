@@ -26,5 +26,14 @@ namespace KademeliEgitimPlatformu.Services
 
         /// <summary>Doğrulanmış soru listesini tek bir transaction içinde veritabanına aktarır.</summary>
         int SorulariVeritabaninaAktar(IEnumerable<Soru> yeniSorular, bool mevcutlariGuncelle = false);
+
+        /// <summary>Mevcut bir soruyu kimliğine (Id) göre günceller.</summary>
+        bool SoruGuncelle(Soru soru);
+
+        /// <summary>Belirtilen kimlikteki soruyu veritabanından siler.</summary>
+        bool SoruSil(int soruId);
+
+        /// <summary>Tüm soru havuzunu .xlsx veya .csv olarak dışa aktarır.</summary>
+        int DisariAktar(string ciktiDosyaYolu);
     }
 }

@@ -26,6 +26,7 @@ namespace KademeliEgitimPlatformu
         private DataGridView _gridSorular = null!;
         private RichTextBox _txtSeciliDetay = null!;
         private RichTextBox _txtUyarilar = null!;
+        private Button _btnDuzenle = null!;
         private Button _btnKaydet = null!;
         private Button _btnIptal = null!;
 
@@ -236,6 +237,7 @@ namespace KademeliEgitimPlatformu
             });
 
             _gridSorular.SelectionChanged += GridSorular_SelectionChanged;
+            _gridSorular.CellDoubleClick += GridSorular_CellDoubleClick;
             _gridSorular.CurrentCellDirtyStateChanged += (s, e) =>
             {
                 if (_gridSorular.IsCurrentCellDirty)
@@ -272,12 +274,28 @@ namespace KademeliEgitimPlatformu
 
             var lblBilgi = new Label
             {
-                Text = "Hatalı/eksik satırlar kırmızı vurgulanır ve veritabanına aktarılmaz. Modül belirtilmeyen sorular yukarıdaki varsayılan modüle atanır.",
+                Text = "İpucu: Hatalı/eksik (kırmızı) satıra çift tıklayarak veya 'Seçili Soruyu Düzenle' butonuyla uygulama içinden anında düzeltebilirsiniz.",
                 Font = FontOnbellegi.Al("Segoe UI", 9f),
                 ForeColor = Color.FromArgb(148, 163, 184),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft
             };
+
+            _btnDuzenle = new Button
+            {
+                Text = "✎ Seçili Soruyu Düzenle",
+                Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold),
+                BackColor = Color.FromArgb(37, 99, 235),
+                ForeColor = Color.White,
+                FlatStyle = FlatStyle.Flat,
+                Size = new Size(195, 44),
+                Dock = DockStyle.Right,
+                Cursor = Cursors.Hand
+            };
+            _btnDuzenle.FlatAppearance.BorderSize = 0;
+            _btnDuzenle.Click += (_, _) => SeciliSoruyuDuzenle();
+
+            var pnlBoslukSol = new Panel { Width = 10, Dock = DockStyle.Right };
 
             _btnKaydet = new Button
             {
@@ -286,14 +304,14 @@ namespace KademeliEgitimPlatformu
                 BackColor = Color.FromArgb(22, 163, 74),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(280, 44),
+                Size = new Size(270, 44),
                 Dock = DockStyle.Right,
                 Cursor = Cursors.Hand
             };
             _btnKaydet.FlatAppearance.BorderSize = 0;
             _btnKaydet.Click += BtnKaydet_Click;
 
-            var pnlBosluk = new Panel { Width = 12, Dock = DockStyle.Right };
+            var pnlBosluk = new Panel { Width = 10, Dock = DockStyle.Right };
 
             _btnIptal = new Button
             {
@@ -302,7 +320,7 @@ namespace KademeliEgitimPlatformu
                 BackColor = Color.FromArgb(51, 65, 85),
                 ForeColor = Color.White,
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(110, 44),
+                Size = new Size(100, 44),
                 Dock = DockStyle.Right,
                 Cursor = Cursors.Hand
             };
@@ -316,6 +334,8 @@ namespace KademeliEgitimPlatformu
             pnlAltButonlar.Controls.Add(lblBilgi);
             pnlAltButonlar.Controls.Add(_btnIptal);
             pnlAltButonlar.Controls.Add(pnlBosluk);
+            pnlAltButonlar.Controls.Add(_btnDuzenle);
+            pnlAltButonlar.Controls.Add(pnlBoslukSol);
             pnlAltButonlar.Controls.Add(_btnKaydet);
 
             anaIzgara.Controls.Add(pnlUst, 0, 0);
@@ -458,6 +478,123 @@ namespace KademeliEgitimPlatformu
                 }
             }
 
+            UyarilarPaneliniGuncelle();
+
+            if (_gridSorular.Rows.Count > 0)
+            {
+                _gridSorular.Rows[0].Selected = true;
+                _btnDuzenle.Enabled = true;
+                SeciliSoruyuGoster(_sonuc.Kayitlar[0]);
+            }
+            else
+            {
+                _btnDuzenle.Enabled = false;
+                _txtSeciliDetay.Text = "Belgeden ayrıştırılmış soru bulunamadı.";
+            }
+
+            OzetVeButonGuncelle();
+        }
+
+        private void GridSorular_SelectionChanged(object? sender, EventArgs e)
+        {
+            bool seciliVar = _gridSorular.SelectedRows.Count > 0;
+            _btnDuzenle.Enabled = seciliVar;
+
+            if (!seciliVar)
+                return;
+
+            if (_gridSorular.SelectedRows[0].Tag is BelgeSoruKaydi kayit)
+                SeciliSoruyuGoster(kayit);
+        }
+
+        private void GridSorular_CellDoubleClick(object? sender, DataGridViewCellEventArgs e)
+        {
+            if (e.RowIndex < 0)
+                return;
+
+            // Onay kutusuna (Aktar) çift tıklandığında düzenleme penceresini açma.
+            if (e.ColumnIndex == _gridSorular.Columns["Aktar"]!.Index)
+                return;
+
+            SeciliSoruyuDuzenle();
+        }
+
+        private void SeciliSoruyuDuzenle()
+        {
+            if (_gridSorular.SelectedRows.Count == 0)
+                return;
+
+            DataGridViewRow seciliSatir = _gridSorular.SelectedRows[0];
+            if (seciliSatir.Tag is not BelgeSoruKaydi kayit)
+                return;
+
+            bool onceGecerliMiydi = kayit.GecerliMi;
+
+            using var duzenle = new SoruDuzenleFormu(kayit.Soru, kayit.SoruNo);
+            if (duzenle.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            kayit.YenidenDogrula();
+            _sonuc.UyarilariYenile();
+
+            SatirGorunumunuGuncelle(seciliSatir, kayit, otomatikIsaretle: !onceGecerliMiydi && kayit.GecerliMi);
+            UyarilarPaneliniGuncelle();
+            SeciliSoruyuGoster(kayit);
+            OzetVeButonGuncelle();
+        }
+
+        private void SatirGorunumunuGuncelle(DataGridViewRow satir, BelgeSoruKaydi kayit, bool otomatikIsaretle)
+        {
+            SoruDogrulamaSonucu dogrulama = SoruDogrulayici.Dogrula(kayit.Soru);
+            bool gecerli = kayit.GecerliMi && dogrulama.GecerliMi;
+
+            satir.Cells["Durum"].Value = gecerli
+                ? (kayit.BilgiUyarilari.Count > 0 ? "✓ Geçerli (Notlu)" : "✓ Geçerli")
+                : "✕ Hatalı / Eksik";
+            satir.Cells["Modul"].Value = DisiplinAdi(kayit.Soru.Disiplin);
+            satir.Cells["Zorluk"].Value = kayit.Soru.Zorluk.ToString();
+            satir.Cells["Baslik"].Value = string.IsNullOrWhiteSpace(kayit.Soru.Baslik)
+                ? "(Soru metni eksik)"
+                : kayit.Soru.Baslik;
+            satir.Cells["Cevap"].Value = kayit.Soru.DogruSecenekIndex is >= 0 and <= 3
+                ? ((char)('A' + kayit.Soru.DogruSecenekIndex)).ToString()
+                : "—";
+
+            string uyariMetni = kayit.TumUyarilarMetni;
+            if (string.IsNullOrWhiteSpace(uyariMetni) && !dogrulama.GecerliMi)
+                uyariMetni = dogrulama.HataOzeti;
+            satir.Cells["Uyarilar"].Value = string.IsNullOrWhiteSpace(uyariMetni) ? "Sorun yok" : uyariMetni;
+
+            if (!gecerli)
+            {
+                satir.Cells["Aktar"].Value = false;
+                satir.Cells["Aktar"].ReadOnly = true;
+                satir.DefaultCellStyle.BackColor = Color.FromArgb(69, 26, 26);
+                satir.DefaultCellStyle.ForeColor = Color.FromArgb(254, 202, 202);
+                satir.DefaultCellStyle.SelectionBackColor = Color.FromArgb(127, 29, 29);
+                satir.Cells["Durum"].Style.ForeColor = Color.FromArgb(248, 113, 113);
+                satir.Cells["Uyarilar"].Style.ForeColor = Color.FromArgb(254, 202, 202);
+            }
+            else
+            {
+                satir.Cells["Aktar"].ReadOnly = false;
+                if (otomatikIsaretle)
+                    satir.Cells["Aktar"].Value = true;
+
+                satir.DefaultCellStyle.BackColor = Color.FromArgb(22, 32, 50);
+                satir.DefaultCellStyle.ForeColor = Color.White;
+                satir.DefaultCellStyle.SelectionBackColor = Color.FromArgb(37, 99, 235);
+                satir.Cells["Durum"].Style.ForeColor = kayit.BilgiUyarilari.Count > 0
+                    ? Color.FromArgb(250, 204, 21)
+                    : Color.FromArgb(74, 222, 128);
+                satir.Cells["Uyarilar"].Style.ForeColor = kayit.BilgiUyarilari.Count > 0
+                    ? Color.FromArgb(253, 224, 71)
+                    : Color.FromArgb(148, 163, 184);
+            }
+        }
+
+        private void UyarilarPaneliniGuncelle()
+        {
             if (_sonuc.Uyarilar.Count == 0)
             {
                 _txtUyarilar.ForeColor = Color.FromArgb(134, 239, 172);
@@ -471,27 +608,6 @@ namespace KademeliEgitimPlatformu
                     sb.AppendLine("• " + uyari);
                 _txtUyarilar.Text = sb.ToString().TrimEnd();
             }
-
-            if (_gridSorular.Rows.Count > 0)
-            {
-                _gridSorular.Rows[0].Selected = true;
-                SeciliSoruyuGoster(_sonuc.Kayitlar[0]);
-            }
-            else
-            {
-                _txtSeciliDetay.Text = "Belgeden ayrıştırılmış soru bulunamadı.";
-            }
-
-            OzetVeButonGuncelle();
-        }
-
-        private void GridSorular_SelectionChanged(object? sender, EventArgs e)
-        {
-            if (_gridSorular.SelectedRows.Count == 0)
-                return;
-
-            if (_gridSorular.SelectedRows[0].Tag is BelgeSoruKaydi kayit)
-                SeciliSoruyuGoster(kayit);
         }
 
         private void GridSorular_CellValueChanged(object? sender, DataGridViewCellEventArgs e)
