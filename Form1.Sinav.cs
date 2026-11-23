@@ -30,7 +30,7 @@ namespace KademeliEgitimPlatformu
                 ColumnCount = 1,
                 RowCount = 6
             };
-            sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));
+            sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 82F));
             sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
             sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Percent, 38F));
             sinavIzgara.RowStyles.Add(new RowStyle(SizeType.Percent, 42F));
@@ -98,6 +98,26 @@ namespace KademeliEgitimPlatformu
             pnlUst.Controls.Add(_lblJetonSayaci);
             pnlUst.Controls.Add(_lblSureSayaci);
             pnlUst.Controls.Add(btnAnaMenuyeDon);
+
+            _pnlSinavIlerlemeArka = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 6,
+                BackColor = Color.FromArgb(51, 65, 85),
+                Margin = new Padding(0, 4, 0, 0),
+                Tag = "SabitRenk"
+            };
+            _pnlSinavIlerlemeDolu = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 40,
+                BackColor = tema.Vurgu,
+                Tag = "SabitRenk"
+            };
+            _pnlSinavIlerlemeArka.Controls.Add(_pnlSinavIlerlemeDolu);
+            _pnlSinavIlerlemeArka.Resize += (_, _) => SinavIlerlemeCubugunuGuncelle();
+            pnlUst.Controls.Add(_pnlSinavIlerlemeArka);
+            _ipucuBalonu.SetToolTip(btnAnaMenuyeDon, "Sınavı sonlandırıp ana menüye döner.");
 
             _lblSoruMetni = new()
             {
@@ -188,6 +208,7 @@ namespace KademeliEgitimPlatformu
                 btn.Click += (s, e) => SecenekSecildi(secenekIndex);
 
                 _secenekButonlari[i] = btn;
+                _ipucuBalonu.SetToolTip(btn, $"Kısayol: {i + 1} tuşu");
                 siklarIzgara.Controls.Add(btn, 0, i);
             }
 
@@ -247,6 +268,8 @@ namespace KademeliEgitimPlatformu
 
             pnlAlt.Controls.Add(_btnIpucuKullan);
             pnlAlt.Controls.Add(_btnSonrakiSoru);
+            _ipucuBalonu.SetToolTip(_btnIpucuKullan, "Bu soruda 2 yanlış şıkkı eler (1 İpucu Jetonu harcar).");
+            _ipucuBalonu.SetToolTip(_btnSonrakiSoru, "Sonraki soruya geçer (Kısayol: Enter).");
 
             sinavIzgara.Controls.Add(pnlUst, 0, 0);
             sinavIzgara.Controls.Add(_lblSoruMetni, 0, 1);
@@ -261,6 +284,9 @@ namespace KademeliEgitimPlatformu
 
         private void SinaviBaslat(DisiplinTuru? disiplin, ZorlukSeviyesi? zorluk, string baslik)
         {
+            if (!SinavdanCikisOnayiAl())
+                return;
+
             _aktifSinavTuru = SinavTuru.Normal;
             _aktifSinavDisiplini = disiplin;
             _aktifZorluk = zorluk;
@@ -414,8 +440,19 @@ namespace KademeliEgitimPlatformu
 
             _lblDisiplinBaslik.Text = baslik;
             _lblSureSayaci.Text = "⏱️ 00:00   ";
+            _sinavDevamEdiyor = true;
             _sinavTimer.Start();
             SoruyuEkranaYukle();
+        }
+
+        private void SinavIlerlemeCubugunuGuncelle()
+        {
+            if (_pnlSinavIlerlemeArka.Width <= 0 || _aktifSorular.Count == 0)
+                return;
+
+            double oran = Math.Clamp((double)(_mevcutSoruIndex + 1) / _aktifSorular.Count, 0.0, 1.0);
+            _pnlSinavIlerlemeDolu.BackColor = AktifTema.Vurgu;
+            _pnlSinavIlerlemeDolu.Width = Math.Max(8, (int)(_pnlSinavIlerlemeArka.Width * oran));
         }
 
         private static void Karistir<T>(IList<T> liste)
@@ -457,6 +494,7 @@ namespace KademeliEgitimPlatformu
 
             _lblSoruSayaci.Text =
                 $"Soru {_mevcutSoruIndex + 1} / {_aktifSorular.Count}  •  Zorluk: {soru.Zorluk}  •  1-4 tuşlarıyla seç";
+            SinavIlerlemeCubugunuGuncelle();
             _lblJetonSayaci.Text = $"🔑 İpucu Jetonu: {_ipucuJetonu}   ";
             _lblSoruMetni.Text = soru.Baslik;
             _txtKodBlogu.Text = soru.KodBlogu ?? "// Bu soru için kod bloğu bulunmamaktadır.";
@@ -583,6 +621,7 @@ namespace KademeliEgitimPlatformu
                 return;
             }
 
+            _sinavDevamEdiyor = false;
             _sinavTimer.Stop();
 
             int toplam = _aktifSorular.Count;

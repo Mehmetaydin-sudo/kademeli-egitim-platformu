@@ -65,8 +65,8 @@ namespace KademeliEgitimPlatformu
             Label lblCevrimdisi = new()
             {
                 Text = veritabaniAktif
-                    ? "  ● Yerel PostgreSQL 18 Aktif  "
-                    : "  ● PostgreSQL Bağlantısı Yok  ",
+                    ? "  ● Yerel PostgreSQL 18 Aktif  ⚙️"
+                    : "  ● PostgreSQL Bağlantısı Yok  ⚙️",
                 Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
                 ForeColor = veritabaniAktif
                     ? Color.FromArgb(74, 222, 128)
@@ -76,8 +76,11 @@ namespace KademeliEgitimPlatformu
                     : Color.FromArgb(69, 26, 26),
                 Dock = DockStyle.Right,
                 AutoSize = true,
-                Padding = new Padding(10, 11, 10, 11)
+                Padding = new Padding(10, 11, 10, 11),
+                Cursor = Cursors.Hand
             };
+            lblCevrimdisi.Click += (_, _) => VeritabaniAyarlariniAc(yenidenYukle: true);
+            _ipucuBalonu.SetToolTip(lblCevrimdisi, "PostgreSQL bağlantı ayarlarını test etmek veya düzenlemek için tıklayın.");
 
             Panel pnlBosluk = new() { Width = 15, Dock = DockStyle.Right };
             pnlUst.Controls.Add(lblBaslik);
@@ -153,13 +156,13 @@ namespace KademeliEgitimPlatformu
                 OrtaModuAc), 1, 0);
 
             zorlukIzgara.Controls.Add(ZorlukBilgiKarti(
-                "Zor Mod (Simülatör)",
+                "Zor Mod (İleri Seviye)",
                 zorAcik ? "✓ Kilidi Açık" : "📝 Geçiş Sınavı",
                 zorAcik
-                    ? "Gizli syntax tuzakları, gerçek Roslyn derleyicisiyle denetlenir."
+                    ? "İleri seviye sorular ve karma değerlendirme. Başlamak için tıklayın."
                     : "Kilidi açmak için tıklayarak Orta -> Zor Seviye Geçiş Ara Sınavı'na (%75) girin.",
                 Color.FromArgb(139, 92, 246),
-                ZorModuAc), 2, 0);
+                () => ZorModuAc(simulatoruAc: false)), 2, 0);
 
             TableLayoutPanel altButonIzgara = new()
             {
@@ -420,7 +423,7 @@ namespace KademeliEgitimPlatformu
         /// Zor Mod henüz açık değilse katı blokaj yerine önce eksik olan
         /// Kolay -> Orta veya Orta -> Zor "Seviye Geçiş Ara Sınavı"nı başlatmayı önerir.
         /// </summary>
-        private void ZorModuAc()
+        private void ZorModuAc(bool simulatoruAc = false)
         {
             IlerlemeDurumu durum = MevcutIlerleme();
             if (!KademeServisi.ZorModAcikMi(durum))
@@ -443,7 +446,7 @@ namespace KademeliEgitimPlatformu
                 }
 
                 DialogResult ortaZorSecim = MessageBox.Show(
-                    "Zor Mod (Gömülü Kod Simülatörü) kilidini açmak için " +
+                    "Zor Mod (İleri Seviye Sınav & Kod Simülatörü) kilidini açmak için " +
                     $"'Orta -> Zor Seviye Geçiş Ara Sınavı'nı en az %{KademeServisi.OrtaModBaraji} " +
                     "başarıyla geçmeniz gerekir.\n\n" +
                     "Şimdi 'Orta -> Zor Seviye Geçiş Ara Sınavı'nı başlatmak ister misiniz?",
@@ -458,7 +461,10 @@ namespace KademeliEgitimPlatformu
                 return;
             }
 
-            EkranDegistir("SIM");
+            if (simulatoruAc)
+                EkranDegistir("SIM");
+            else
+                SinaviBaslat(null, ZorlukSeviyesi.Zor, "Zor Mod — İleri Seviye Değerlendirme");
         }
 
         private int GuvenliSoruSayisi(out bool veritabaniAktif)

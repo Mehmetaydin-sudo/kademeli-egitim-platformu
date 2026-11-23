@@ -203,6 +203,106 @@ namespace KademeliEgitimPlatformu.Services
             return eklenen;
         }
 
+        /// <summary>Mevcut bir soruyu kimliğine (Id) göre parametreli sorgu ve transaction ile günceller.</summary>
+        public bool SoruGuncelle(Soru soru)
+        {
+            ArgumentNullException.ThrowIfNull(soru);
+            if (soru.Id <= 0 || !SoruGecerliMi(Normallestir(soru)))
+                return false;
+
+            const string sql = @"
+                UPDATE sorular SET
+                    disiplin            = @disiplin,
+                    zorluk              = @zorluk,
+                    etiket              = @etiket,
+                    baslik              = @baslik,
+                    kod_blogu           = @kod_blogu,
+                    secenek_a           = @secenek_a,
+                    secenek_b           = @secenek_b,
+                    secenek_c           = @secenek_c,
+                    secenek_d           = @secenek_d,
+                    dogru_secenek_index = @dogru_secenek_index,
+                    aciklama_a          = @aciklama_a,
+                    aciklama_b          = @aciklama_b,
+                    aciklama_c          = @aciklama_c,
+                    aciklama_d          = @aciklama_d,
+                    guncelleme_tarihi   = CURRENT_TIMESTAMP
+                WHERE id = @id;";
+
+            using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+            using var islem = baglanti.BeginTransaction();
+            using var komut = new NpgsqlCommand(sql, baglanti, islem);
+            komut.Parameters.AddWithValue("@id", soru.Id);
+            ParametreleriBagla(komut, soru);
+
+            int etkilenen = komut.ExecuteNonQuery();
+            islem.Commit();
+            return etkilenen > 0;
+        }
+
+        /// <summary>Belirtilen kimlikteki soruyu veritabanından siler.</summary>
+        public bool SoruSil(int soruId)
+        {
+            if (soruId <= 0)
+                return false;
+
+            using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+            using var islem = baglanti.BeginTransaction();
+            using var komut = new NpgsqlCommand("DELETE FROM sorular WHERE id = @id;", baglanti, islem);
+            komut.Parameters.AddWithValue("@id", soruId);
+
+            int etkilenen = komut.ExecuteNonQuery();
+            islem.Commit();
+            return etkilenen > 0;
+        }
+
+        /// <summary>Öğretmenlerin kolayca doldurabileceği örnek Excel (.xlsx) soru şablonu oluşturur.</summary>
+        public static void OrnekExcelSablonuOlustur(string ciktiDosyaYolu)
+        {
+            if (string.IsNullOrWhiteSpace(ciktiDosyaYolu))
+                throw new ArgumentException("Çıktı dosya yolu boş olamaz.", nameof(ciktiDosyaYolu));
+
+            string guvenliYol = VeriYolu.GuvenliCiktiYolu(ciktiDosyaYolu);
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(guvenliYol));
+            if (!string.IsNullOrEmpty(klasor))
+                Directory.CreateDirectory(klasor);
+
+            var ornekler = new List<Soru>
+            {
+                new()
+                {
+                    Disiplin = DisiplinTuru.GorselProgramlama,
+                    Zorluk = ZorlukSeviyesi.Kolay,
+                    Baslik = "Örnek Soru 1: Kendi dersinize ait soru metnini bu hücreye yazabilirsiniz.",
+                    Secenekler = new List<string> { "A şıkkı metni", "B şıkkı metni (doğru cevap)", "C şıkkı metni", "D şıkkı metni" },
+                    DogruSecenekIndex = 1,
+                    YanlisCevapAciklamalari = new Dictionary<int, string>
+                    {
+                        [0] = "A şıkkının neden yanlış olduğuna dair kısa açıklama.",
+                        [2] = "C şıkkının neden yanlış olduğuna dair kısa açıklama.",
+                        [3] = "D şıkkının neden yanlış olduğuna dair kısa açıklama."
+                    }
+                },
+                new()
+                {
+                    Disiplin = DisiplinTuru.VeriTabanlari,
+                    Zorluk = ZorlukSeviyesi.Orta,
+                    Etiket = "AraSinav",
+                    Baslik = "Örnek Soru 2: Ara sınavlara girmesini istediğiniz soruların Etiket sütununa 'AraSinav' yazabilirsiniz.",
+                    Secenekler = new List<string> { "Birinci seçenek", "İkinci seçenek", "Üçüncü seçenek (doğru cevap)", "Dördüncü seçenek" },
+                    DogruSecenekIndex = 2,
+                    YanlisCevapAciklamalari = new Dictionary<int, string>
+                    {
+                        [0] = "Yanlış seçildiğinde öğrenciye gösterilecek pedagojik açıklama.",
+                        [1] = "Yanlış seçildiğinde öğrenciye gösterilecek pedagojik açıklama.",
+                        [3] = "Yanlış seçildiğinde öğrenciye gösterilecek pedagojik açıklama."
+                    }
+                }
+            };
+
+            ExceleYaz(ornekler, guvenliYol);
+        }
+
         /// <summary>
         /// Mevcut soru havuzunu ClosedXML ile Excel (.xlsx) veya .csv dosyasına dışa aktarır.
         /// Salt-okunur (Program Files) veya göreli yolları Belgelerim\KademeliEgitimPlatformu klasörüne yönlendirir.

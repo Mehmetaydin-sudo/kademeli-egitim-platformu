@@ -41,7 +41,7 @@ namespace KademeliEgitimPlatformu.Tests
             Assert.Null(hata);
             Assert.NotNull(baslik);
             Assert.Contains("Kademeli Eğitim Platformu", baslik);
-            Assert.Contains("v0.8.5", baslik);
+            Assert.Contains("v0.9.0", baslik);
         }
 
         [Fact]

@@ -48,6 +48,17 @@ namespace KademeliEgitimPlatformu.Services
             Soru = soru;
             KaynakOzeti = kaynakOzeti;
         }
+
+        /// <summary>
+        /// Kullanıcı önizleme ekranında soruyu düzenledikten sonra SoruDogrulayici ile yeniden denetler.
+        /// </summary>
+        public void YenidenDogrula()
+        {
+            Hatalar.Clear();
+            SoruDogrulamaSonucu dogrulama = SoruDogrulayici.Dogrula(Soru);
+            foreach (string hata in dogrulama.Hatalar)
+                Hatalar.Add(hata);
+        }
     }
 
     /// <summary>
@@ -87,6 +98,26 @@ namespace KademeliEgitimPlatformu.Services
 
         public int GecerliSayisi => Kayitlar.Count(k => k.GecerliMi);
         public int HataliSayisi => Kayitlar.Count(k => !k.GecerliMi);
+
+        /// <summary>
+        /// Önizleme ekranında yapılan düzenlemelerden sonra tüm soru uyarılarını güncel duruma göre yeniler.
+        /// Belge geneli (SoruNo == null) uyarıları korunur.
+        /// </summary>
+        public void UyarilariYenile()
+        {
+            var genelUyarilar = Uyarilar.Where(u => !u.SoruNo.HasValue).ToList();
+            Uyarilar.Clear();
+            Uyarilar.AddRange(genelUyarilar);
+
+            foreach (BelgeSoruKaydi kayit in Kayitlar)
+            {
+                foreach (string hata in kayit.Hatalar)
+                    Uyarilar.Add(new BelgeAyristirmaUyarisi(kayit.SoruNo, hata, kayit.KaynakOzeti));
+
+                foreach (string bilgi in kayit.BilgiUyarilari)
+                    Uyarilar.Add(new BelgeAyristirmaUyarisi(kayit.SoruNo, bilgi, kayit.KaynakOzeti));
+            }
+        }
     }
 
     /// <summary>
@@ -190,6 +221,78 @@ namespace KademeliEgitimPlatformu.Services
 
             sonuc.KaynakDosyaYolu = dosyaYolu;
             return sonuc;
+        }
+
+        /// <summary>
+        /// Öğretmenlerin hem klasik test formatını hem de tablo formatını görerek
+        /// kolayca doldurabileceği çevrimdışı örnek Word (.docx) şablonu üretir.
+        /// </summary>
+        public static void OrnekWordSablonuOlustur(string ciktiDosyaYolu)
+        {
+            if (string.IsNullOrWhiteSpace(ciktiDosyaYolu))
+                throw new ArgumentException("Çıktı dosya yolu boş olamaz.", nameof(ciktiDosyaYolu));
+
+            string guvenliYol = VeriYolu.GuvenliCiktiYolu(ciktiDosyaYolu);
+            string? klasor = Path.GetDirectoryName(Path.GetFullPath(guvenliYol));
+            if (!string.IsNullOrEmpty(klasor))
+                Directory.CreateDirectory(klasor);
+
+            using WordprocessingDocument doc = WordprocessingDocument.Create(guvenliYol, WordprocessingDocumentType.Document);
+            MainDocumentPart mainPart = doc.AddMainDocumentPart();
+            mainPart.Document = new Document(new Body());
+            Body body = mainPart.Document.Body!;
+
+            string[] klasikSatirlar =
+            {
+                "KADEMELİ EĞİTİM PLATFORMU — ÖRNEK SORU ŞABLONU",
+                "Bu belgeyi doğrudan düzenleyip 'Soru İçe Aktar' butonuyla platforma yükleyebilirsiniz.",
+                "",
+                "1. Kademeli öğrenme yaklaşımında zorluk seviyelerinin temel amacı nedir?",
+                "A) Tüm konuları tek seferde ezberletmek",
+                "B) Kolaydan zora adım adım kavrama ve pekiştirme sağlamak",
+                "C) Yalnızca hız ölçmek",
+                "D) Yanlış cevapları gizlemek",
+                "Doğru Cevap: B",
+                "Zorluk: Kolay",
+                "Açıklama: Kademeli sistemde öğrenci temel kavramları oturttuktan sonra bir üst zorluk seviyesine geçer.",
+                "",
+                "2. Yanlış cevap verildiğinde 'Neden Yanlış?' açıklaması göstermek öğrenmeyi nasıl etkiler?",
+                "A) Kavram yanılgısının anında fark edilip düzeltilmesini sağlar",
+                "B) Yalnızca sınav süresini uzatır",
+                "C) Öğrenme kalıcılığına etkisi yoktur",
+                "D) Doğru şıkkı gizler",
+                "Cevap: A",
+                "Zorluk: Orta",
+                "Neden Yanlış: Hatanın gerekçesini görmek kalıcı öğrenmeyi güçlendirir.",
+                "",
+                "Alternatif Tablo Formatı (Aşağıdaki tabloya da yeni satırlar ekleyebilirsiniz):"
+            };
+
+            foreach (string satir in klasikSatirlar)
+                body.AppendChild(new Paragraph(new Run(new Text(satir))));
+
+            var tablo = new Table();
+            tablo.AppendChild(SablonTabloSatiri("Soru", "A", "B", "C", "D", "Cevap", "Zorluk", "Açıklama"));
+            tablo.AppendChild(SablonTabloSatiri(
+                "Tablo formatında hazırlanan örnek soru metni buraya yazılır.",
+                "Birinci seçenek",
+                "İkinci seçenek",
+                "Üçüncü seçenek (doğru cevap)",
+                "Dördüncü seçenek",
+                "C",
+                "Zor",
+                "Yanlış şık seçildiğinde öğrenciye gösterilecek kısa açıklama."));
+
+            body.AppendChild(tablo);
+            mainPart.Document.Save();
+        }
+
+        private static TableRow SablonTabloSatiri(params string[] hucreler)
+        {
+            var satir = new TableRow();
+            foreach (string metin in hucreler)
+                satir.AppendChild(new TableCell(new Paragraph(new Run(new Text(metin)))));
+            return satir;
         }
 
         // ==================== DOCX (.DOCX) OKUMA ====================

@@ -207,6 +207,93 @@ namespace KademeliEgitimPlatformu.Tests
         }
 
         [Fact]
+        public void OrnekExcelSablonuOlustur_VeSoruGuncelleSil_Calisir()
+        {
+            string klasor = Path.Combine(Path.GetTempPath(), "kademeli-sablon-xlsx-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(klasor);
+            string sablonYolu = Path.Combine(klasor, "Ornek_Soru_Sablonu.xlsx");
+            string dogrulanmisCsv = Path.Combine(klasor, "dogrulanmis.csv");
+
+            try
+            {
+                SoruServisi.OrnekExcelSablonuOlustur(sablonYolu);
+                Assert.True(File.Exists(sablonYolu));
+                Assert.Equal(2, SoruServisi.PaketOlustur(sablonYolu, dogrulanmisCsv));
+
+                var servis = new SoruServisi();
+                string benzersizBaslik = "CRUD Test Sorusu " + Guid.NewGuid().ToString("N");
+                var yeni = new Soru
+                {
+                    Disiplin = DisiplinTuru.GorselProgramlama,
+                    Zorluk = ZorlukSeviyesi.Kolay,
+                    Baslik = benzersizBaslik,
+                    Secenekler = new List<string> { "A", "B", "C", "D" },
+                    DogruSecenekIndex = 0
+                };
+
+                Assert.Equal(1, servis.SorulariVeritabaninaAktar(new[] { yeni }));
+                Soru eklenen = servis.TumSorulariGetir().Find(s => s.Baslik == benzersizBaslik)!;
+                Assert.NotNull(eklenen);
+
+                eklenen.Zorluk = ZorlukSeviyesi.Zor;
+                eklenen.DogruSecenekIndex = 2;
+                Assert.True(servis.SoruGuncelle(eklenen));
+
+                Soru guncel = servis.TumSorulariGetir().Find(s => s.Id == eklenen.Id)!;
+                Assert.Equal(ZorlukSeviyesi.Zor, guncel.Zorluk);
+                Assert.Equal(2, guncel.DogruSecenekIndex);
+
+                Assert.True(servis.SoruSil(eklenen.Id));
+                Assert.Null(servis.TumSorulariGetir().Find(s => s.Id == eklenen.Id));
+            }
+            finally
+            {
+                try { Directory.Delete(klasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
+        public void VeritabaniBaglantisi_AyarKaydetmeVeSihirbazOlusturma_Calisir()
+        {
+            string klasor = Path.Combine(Path.GetTempPath(), "kademeli-ayar-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(klasor);
+            string hedefJson = Path.Combine(klasor, "appsettings.json");
+
+            try
+            {
+                string kayitYolu = VeritabaniBaglantisi.BaglantiAyariniKaydet(
+                    "localhost", 5432, "kademeli_egitim", "postgres", "Gizli;Sifre=123", hedefJson);
+
+                Assert.Equal(hedefJson, kayitYolu);
+                Assert.True(File.Exists(hedefJson));
+
+                string json = File.ReadAllText(hedefJson);
+                Assert.Contains("DefaultConnection", json);
+                Assert.Contains("kademeli_egitim", json);
+                Assert.StartsWith(VeriYolu.VeriKlasoru, VeriYolu.KullaniciAyarDosyasiYolu, StringComparison.OrdinalIgnoreCase);
+
+                Exception? formHata = null;
+                var t = new System.Threading.Thread(() =>
+                {
+                    try
+                    {
+                        using var f = new VeritabaniAyarFormu();
+                        Assert.Contains("PostgreSQL", f.Text);
+                    }
+                    catch (Exception ex) { formHata = ex; }
+                }) { IsBackground = true };
+                t.SetApartmentState(System.Threading.ApartmentState.STA);
+                t.Start();
+                Assert.True(t.Join(TimeSpan.FromSeconds(15)));
+                Assert.Null(formHata);
+            }
+            finally
+            {
+                try { Directory.Delete(klasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
         public void KullaniciDostuHataMesaji_BaglantiVeJsonHatalariniTurkceAciklar()
         {
             string baglantiMesaji = VeritabaniBaglantisi.KullaniciDostuHataMesaji(

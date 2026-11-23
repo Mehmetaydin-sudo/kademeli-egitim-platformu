@@ -25,6 +25,10 @@ namespace KademeliEgitimPlatformu.Services
         public static string AyarDosyasiYolu =>
             Path.Combine(AppContext.BaseDirectory, "appsettings.json");
 
+        /// <summary>Kullanıcıya özel yazılabilir yapılandırma dosyası (Belgelerim\KademeliEgitimPlatformu\appsettings.json) yolu.</summary>
+        public static string KullaniciAyarDosyasiYolu =>
+            Path.Combine(VeriKlasoru, "appsettings.json");
+
         /// <summary>Uygulama dizinindeki salt-okunur örnek yapılandırma dosyası (appsettings.example.json) yolu.</summary>
         public static string OrnekAyarDosyasiYolu =>
             Path.Combine(AppContext.BaseDirectory, "appsettings.example.json");
