@@ -35,7 +35,7 @@ namespace KademeliEgitimPlatformu
             Panel pnlUst = new() { Dock = DockStyle.Fill };
             Label lblBaslik = new()
             {
-                Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu",
+                Text = "Kademeli Eğitim Platformu",
                 Font = FontOnbellegi.Al("Segoe UI", 20, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Left,
@@ -467,7 +467,7 @@ namespace KademeliEgitimPlatformu
             }
         }
 
-        private void UsbPaketYukle_Click(object? sender, EventArgs e)
+        private async void UsbPaketYukle_Click(object? sender, EventArgs e)
         {
             string belgelerim = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
@@ -487,17 +487,47 @@ namespace KademeliEgitimPlatformu
             if (ofd.ShowDialog() != DialogResult.OK)
                 return;
 
+            Button? kaynakButon = sender as Button;
+            Cursor oncekiImlec = this.Cursor;
+
             try
             {
-                string uzanti = Path.GetExtension(ofd.FileName).ToLowerInvariant();
+                if (kaynakButon is not null) kaynakButon.Enabled = false;
+                this.Cursor = Cursors.WaitCursor;
+
+                string secilenYol = ofd.FileName;
+                string uzanti = Path.GetExtension(secilenYol).ToLowerInvariant();
                 if (uzanti is ".docx" or ".pdf")
                 {
-                    using var onizleme = new BelgeOnizlemeFormu(ofd.FileName);
+                    BelgeDonusturmeSonucu onizlemeSonucu = await Task.Run(
+                        () => BelgeSoruDonusturucu.DosyadanDonustur(secilenYol));
+
+                    if (IsDisposed)
+                        return;
+
+                    this.Cursor = oncekiImlec;
+
+                    using var onizleme = new BelgeOnizlemeFormu(
+                        secilenYol,
+                        DisiplinTuru.GorselProgramlama,
+                        onizlemeSonucu);
+
                     if (onizleme.ShowDialog(this) != DialogResult.OK || onizleme.OnaylananSorular.Count == 0)
                         return;
 
+                    this.Cursor = Cursors.WaitCursor;
                     int onayliAdet = onizleme.OnaylananSorular.Count;
-                    int eklenen = SoruDeposu.SorulariVeritabaninaAktar(onizleme.OnaylananSorular);
+                    var onayliListe = onizleme.OnaylananSorular;
+
+                    (int eklenen, int toplamHavuz) = await Task.Run(() =>
+                    {
+                        int aktarilan = SoruDeposu.SorulariVeritabaninaAktar(onayliListe);
+                        return (aktarilan, SoruDeposu.SoruSayisi());
+                    });
+
+                    if (IsDisposed)
+                        return;
+
                     int mevcutOlduguIcinAtlanan = Math.Max(0, onayliAdet - eklenen);
                     string mukerrerBilgi = mevcutOlduguIcinAtlanan > 0
                         ? $"\nVeritabanında Zaten Bulunduğu İçin Atlanan: {mevcutOlduguIcinAtlanan}"
@@ -506,7 +536,7 @@ namespace KademeliEgitimPlatformu
                     MessageBox.Show(
                         $"Onaylanan sorular PostgreSQL veri tabanına aktarıldı!\n\n" +
                         $"Yeni Eklenen Soru Sayısı: {eklenen}{mukerrerBilgi}\n" +
-                        $"Toplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
+                        $"Toplam Soru Havuzu: {toplamHavuz}",
                         "Belgeden Soru İçe Aktarma Başarılı",
                         MessageBoxButtons.OK,
                         MessageBoxIcon.Information);
@@ -514,13 +544,21 @@ namespace KademeliEgitimPlatformu
                     return;
                 }
 
-                int paketEklenen = SoruDeposu.DisaridanPaketYukle(ofd.FileName);
-                string atlananBilgi = SoruDeposu.SonPaketAtlananSayisi > 0
-                    ? $"\nGeçersiz Olduğu İçin Atlanan: {SoruDeposu.SonPaketAtlananSayisi}"
+                (int paketEklenen, int atlananAdet, int toplamSoru) = await Task.Run(() =>
+                {
+                    int aktarilan = SoruDeposu.DisaridanPaketYukle(secilenYol);
+                    return (aktarilan, SoruDeposu.SonPaketAtlananSayisi, SoruDeposu.SoruSayisi());
+                });
+
+                if (IsDisposed)
+                    return;
+
+                string atlananBilgi = atlananAdet > 0
+                    ? $"\nGeçersiz Olduğu İçin Atlanan: {atlananAdet}"
                     : "";
 
                 MessageBox.Show(
-                    $"Sorular PostgreSQL veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {paketEklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
+                    $"Sorular PostgreSQL veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {paketEklenen}{atlananBilgi}\nToplam Soru Havuzu: {toplamSoru}",
                     "Soru İçe Aktarma Başarılı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -558,6 +596,15 @@ namespace KademeliEgitimPlatformu
                     "Hata",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    this.Cursor = oncekiImlec;
+                    if (kaynakButon is not null && !kaynakButon.IsDisposed)
+                        kaynakButon.Enabled = true;
+                }
             }
         }
     }

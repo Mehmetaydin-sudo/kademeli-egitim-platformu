@@ -47,7 +47,10 @@ namespace KademeliEgitimPlatformu.Services
             foreach (YanlisKaydi kayit in kayitlar)
             {
                 using var komut = new NpgsqlCommand(ekleSql, baglanti, islem);
-                komut.Parameters.AddWithValue("@kullanici_id", (object?)_kullaniciId ?? DBNull.Value);
+                komut.Parameters.Add(new NpgsqlParameter("@kullanici_id", NpgsqlTypes.NpgsqlDbType.Integer)
+                {
+                    Value = (object?)_kullaniciId ?? DBNull.Value
+                });
                 komut.Parameters.AddWithValue("@tarih", kayit.Tarih.ToUniversalTime());
                 komut.Parameters.AddWithValue("@disiplin", (short)kayit.Disiplin);
                 komut.Parameters.AddWithValue("@zorluk", (short)kayit.Zorluk);
@@ -158,7 +161,7 @@ namespace KademeliEgitimPlatformu.Services
             DateTime tarih = raporTarihi ?? DateTime.Now;
             var sb = new StringBuilder();
 
-            sb.AppendLine("=== KADEMELİ BİLİŞİM VE SİBER GÜVENLİK EĞİTİM PLATFORMU ===");
+            sb.AppendLine("=== KADEMELİ EĞİTİM PLATFORMU ===");
             sb.AppendLine("Hata Karnesi Raporu");
             sb.AppendLine($"Rapor Tarihi : {tarih:dd.MM.yyyy HH:mm}");
             if (!string.IsNullOrWhiteSpace(surum))

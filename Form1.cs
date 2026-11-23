@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.8.1";
+        private const string Surum = "v0.8.2";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
@@ -228,7 +228,7 @@ namespace KademeliEgitimPlatformu
         private void ArayuzuOlustur()
         {
             this.AutoScaleMode = AutoScaleMode.Dpi;
-            this.Text = $"Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu — {Surum} (PostgreSQL 18 + Roslyn)";
+            this.Text = $"Kademeli Eğitim Platformu — {Surum}";
             // 1366x768 gibi düşük çözünürlüklü ekranlarda da pencere ekrana sığar.
             this.Size = new Size(1280, 800);
             this.MinimumSize = new Size(1024, 700);
@@ -267,8 +267,8 @@ namespace KademeliEgitimPlatformu
 
             Label lblLogo = new()
             {
-                Text = "⚡ EDUSEC\n    POSTGRESQL + ROSLYN",
-                Font = FontOnbellegi.Al("Segoe UI", 13f, FontStyle.Bold),
+                Text = "🎓 KADEMELİ EĞİTİM\n    ÇEVRİMDIŞI PLATFORM",
+                Font = FontOnbellegi.Al("Segoe UI", 12f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(56, 189, 248),
                 Dock = DockStyle.Top,
                 Height = 70

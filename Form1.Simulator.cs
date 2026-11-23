@@ -416,8 +416,7 @@ namespace KademeliEgitimPlatformu
 
             try
             {
-                var durum = new IlerlemeDurumu(
-                    _gorselBasari, _veriTabaniBasari, _siberBasari, _ipucuJetonu, _simulatorOduluAlindi);
+                IlerlemeDurumu durum = MevcutIlerleme();
 
                 // Geçmiş tüm yanlış cevaplar (en fazla 300 kayıt) raporda yer alır.
                 var yanlislar = KarneDeposu.SonKayitlar(KarneServisi.MaksKayitSayisi);
@@ -443,7 +442,7 @@ namespace KademeliEgitimPlatformu
             catch (Exception ex)
             {
                 MessageBox.Show(
-                    "Rapor kaydedilemedi.\n\n" + ex.Message,
+                    "Rapor kaydedilemedi.\n\n" + VeritabaniBaglantisi.KullaniciDostuHataMesaji(ex),
                     "Hata",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Error);

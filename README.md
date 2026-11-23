@@ -1,52 +1,67 @@
-# 🛡️ Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu
+# 🎓 Kademeli Eğitim Platformu
 
-Ortaöğretim ve ön lisans öğrencileri için **PostgreSQL 18 (`Npgsql`)**, **`BCrypt.Net-Next`**, **Word/PDF (`.docx` / `.pdf`)**, **`ClosedXML` (`.xlsx` / `.csv`)** ve **gömülü Roslyn derleyicisi** mimarili masaüstü öğrenme ve sözdizimi (syntax) simülasyon platformu.
-
----
-
-## 👥 Proje Geliştirme Ekibi
-* **Mehmet Aydın** — Yazılım Mimarisi, PostgreSQL Veri Tabanı Motoru ve Gömülü Kod Simülatörü
-* **Ünal Küçük** — Görsel Programlama & Veri Tabanları Soru Havuzu ve Pedagojik Açıklamalar
-* **İsmail Can Şal** — Siber Güvenlik Modülü ve Gizli Syntax Tuzak Senaryoları
-* **Yağız Domaç** — Arayüz (UI/UX) Tasarımı, Oyunlaştırma Rozetleri ve Birim Testler
+Öğretmenlerin ve öğrencilerin **herhangi bir ders, branş veya uzmanlık alanı** için kendi soru paketlerini kolayca yükleyebildiği; **Kolay, Orta ve Zor** kademeli zorluk seviyeleri ile başarı barajı sistemini birleştiren, **%100 çevrimdışı** çalışan masaüstü eğitim ve sınav platformu.
 
 ---
 
-## 🚀 Temel Özellikler
+## 🎯 Projenin Amacı
 
-* **Yerel PostgreSQL 18 (`Npgsql`) Mimarisi:** Soru havuzu (`sorular`), kullanıcı hesapları (`kullanicilar`), ilerleme metrikleri (`ilerleme`, `kullanici_ilerleme`), seviye geçiş ara sınav geçmişi (`seviye_gecis_sinavlari`) ve hata karnesi (`yanlis_cevaplar`) yerel PostgreSQL 18 (`localhost:5432`, veritabanı: `kademeli_egitim`) üzerinde tutulur. Bağlantı bilgileri kod içine gömülmez; `appsettings.json` dosyasından `Microsoft.Extensions.Configuration.Json` ile okunur.
-* **`BCrypt.Net-Next` Tuzlu Parola Güvenliği:** Kullanıcı kayıt, giriş ve şifre güncelleme işlemlerinde SHA-256 yerine `BCrypt.Net-Next` (`BCrypt.HashPassword` / `BCrypt.Verify`) ile rastgele tuzlu (salted) parola özetleme uygulanır.
-* **Seviye Geçiş Ara Sınavı Sistemi:** Katı engel yerine kademeler arasında (`Kolay -> Orta` ve `Orta -> Zor`) **"Seviye Geçiş Ara Sınavı"** uygulanır:
-  * **Kolay Mod** — her zaman açıktır.
-  * **Kolay -> Orta Seviye Geçiş Ara Sınavı ve Modül Ara Sınavları** — geçme barajı **%70**'tir; geçildiğinde **Orta Mod** kilidi kalıcı olarak açılır ve sonuç `seviye_gecis_sinavlari` tablosuna kaydedilir.
-  * **Orta -> Zor Seviye Geçiş Ara Sınavı** — geçme barajı **%75**'tir; geçildiğinde **Zor Mod (Gömülü Kod Simülatörü)** kilidi kalıcı olarak açılır.
-* **Word (`.docx`) ve PDF (`.pdf`) Belgelerinden Çevrimdışı Soru İçe Aktarma:** `DocumentFormat.OpenXml` ve `UglyToad.PdfPig` ile tamamen çevrimdışı olarak Word (paragraf ve tablo) ve PDF belgelerinden soru ayrıştırılır. Kayıt öncesinde açılan **Önizleme / Kontrol Penceresi** (`BelgeOnizlemeFormu`), `SoruDogrulayici` üzerinden hatalı veya eksik şıklı soruları kırmızı vurgular, varsayılan modül seçimine ve onaylanan geçerli soruların `NpgsqlTransaction` ile veritabanına aktarılmasına izin verir.
-* **`ClosedXML` ile Excel (`.xlsx`) ve `.csv` Veri Aktarımı:** Soru içe ve dışa aktarım işlemlerinde JSON formatı kaldırılmış olup `ClosedXML` kütüphanesiyle `.xlsx` ve `.csv` formatları kullanılır. İçe aktarım işlemleri mevcut kullanıcı ilerlemesini ezmeden `NpgsqlTransaction` güvencesiyle yürütülür.
-* **Pedagojik "Neden Yanlış" Paneli:** Yanlış şık seçildiğinde hatanın kaynağını sade bir dille anında açıklar.
-* **Gömülü Kod Simülatörü (Roslyn):** Editördeki C# kodunu gerçek Roslyn derleyicisiyle denetler. Hatalar satır/sütun numarası ve Türkçe pedagojik ipuçlarıyla listelenir.
-* **Soru Bazlı Hata Karnesi:** Yanlış cevaplar (soru, seçilen cevap, doğru cevap ve açıklama) PostgreSQL `yanlis_cevaplar` tablosunda saklanır (en yeni 300 kayıt) ve `.txt` raporu olarak indirilebilir.
-* **Disiplin Bazlı Puanlama & Şık Karıştırma:** Her sınavda soru sırası ve şıklar rastgelelenir; doğru cevap ve yanlış açıklamaları yeni sıraya birlikte taşınır.
-* **Klavye Kısayolları:** Sınav sırasında `1`–`4` tuşlarıyla şık seçilir, `Enter` ile sonraki soruya geçilir.
+Kademeli Eğitim Platformu; öğrencilerin konuları ezberlemek yerine sıfırdan uzmanlığa doğru adım adım kavramasını hedefleyen genel amaçlı bir öğrenme ortamıdır. Matematikten yabancı dile, fen bilimlerinden hukuka veya mesleki derslere kadar **her alana uyarlanabilir**:
+
+- Öğretmenler ve eğitmenler mevcut ders notlarını veya testlerini ekstra teknik formatla uğraşmadan (`.docx`, `.pdf`, `.xlsx`, `.csv`) platforma aktarabilir.
+- Öğrenciler internet bağlantısına ihtiyaç duymadan kendi bilgisayarlarında kademeli sınavlara girer, yanlış yaptıkları sorularda hatanın sebebini anında öğrenir ve performans karneleriyle eksik konularını takip eder.
+- İlk kurulumda veritabanı boşsa platformun akışını hemen deneyimleyebilmek için örnek bir başlangıç soru havuzu otomatik yüklenir.
 
 ---
 
-## 🖥️ Kurulum ve Çalıştırma
+## 🚀 Öne Çıkan Özellikler
+
+* **Her Alan İçin Kendi Soru Paketini Yükleme (`.docx`, `.pdf`, `.xlsx`, `.csv`):**
+  * **Word (`.docx`) ve PDF (`.pdf`):** `DocumentFormat.OpenXml` ve `UglyToad.PdfPig` ile tamamen çevrimdışı olarak klasik test belgelerini, toplu cevap anahtarlarını (`1-B, 2-A` / `1. B`) ve Word tablolarını (`Soru | A | B | C | D | Cevap | Zorluk | Açıklama`) otomatik ayrıştırır.
+  * **Önizleme ve Doğrulama Ekranı:** `.docx` veya `.pdf` seçildiğinde sorular veritabanına yazılmadan önce önizleme ekranında listelenir; `SoruDogrulayici` ile eksik şıklı veya cevapsız sorular vurgulanır ve yalnızca kullanıcının onayladığı geçerli sorular aktarılır.
+  * **Excel (`.xlsx`) ve `.csv`:** `ClosedXML` ile toplu soru içe/dışa aktarım ve USB soru paketi üretimi (`tools/SoruPaketleyici`) desteklenir. Tüm içe aktarımlar mevcut ilerlemeyi ezmeden `NpgsqlTransaction` içinde çalışır.
+* **Pedagojik "Neden Yanlış?" Açıklaması:** Yanlış bir şık seçildiğinde yalnızca doğru cevabı göstermekle kalmaz; hatanın kaynağını sade ve öğretici bir dille anında açıklar.
+* **Kademeli Zorluk Geçişi ve Seviye Barajı Kuralları:**
+  * **Kolay Seviye:** Her zaman açıktır; temel kavramların pekiştirilmesi için başlangıç adımıdır.
+  * **Kolay → Orta Geçişi (%70 Başarı Barajı):** Katı engel yerine **Seviye Geçiş Ara Sınavı** uygulanır; baraj aşıldığında Orta seviye kilidi kalıcı olarak açılır.
+  * **Orta → Zor Geçişi (%75 Başarı Barajı):** Orta → Zor Seviye Geçiş Ara Sınavı başarıyla tamamlandığında ileri seviye (Zor mod) kilidi kalıcı olarak açılır.
+* **İstatistik, Zayıf Konu Tespiti ve Performans Karnesi Dışa Aktarma:**
+  * Modül/konu bazlı başarı yüzdeleri, sınav geçmişi ve yanlış yapılan sorular kalıcı olarak kaydedilir.
+  * Yanlış cevaplar (soru metni, verilen cevap, doğru cevap ve pedagojik açıklama) **Hata ve Performans Karnesi** olarak izlenir ve `.txt` raporu halinde dışa aktarılabilir.
+  * Her sınavda sorular ve şıklar karıştırılır (`SoruGorunumu`), klavye kısayolları (`1`–`4` ve `Enter`) ve ipucu jetonu sistemi öğrenme deneyimini destekler.
+* **%100 Çevrimdışı Yerel Masaüstü Mimarisi:**
+  * Harici sunucu veya internet bağlantısı gerektirmez; Windows Forms (.NET 8) üzerinde yerel **PostgreSQL 18 (`Npgsql`)** veritabanıyla çalışır.
+  * Parola ve hassas özetleme işlemlerinde `BCrypt.Net-Next` (tuzlu özetleme), tüm SQL sorgularında ise SQL Injection'a karşı parametreli sorgular kullanılır.
+
+---
+
+## 🛠️ Kurulum ve Geliştirici Başlangıç Adımları
 
 ### Gereksinimler
-* Windows 10/11 (64-bit veya 32-bit)
-* **.NET 8 SDK**
-* **PostgreSQL 18** (`localhost:5432`)
+* **İşletim Sistemi:** Windows 10 veya Windows 11
+* **SDK:** [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+* **Veritabanı:** Yerel **PostgreSQL 18** (`localhost:5432`)
 
-### 1. Veritabanı ve Şema Kurulumu
-Yerel PostgreSQL 18 sunucusunda `kademeli_egitim` veritabanını oluşturun ve `database/schema.sql` dosyasını çalıştırın:
+### 1. Projeyi Klonlama
+```bash
+git clone https://github.com/Mehmetaydin-sudo/kademeli-egitim-platformu.git
+cd kademeli-egitim-platformu
+```
+
+### 2. Veritabanı ve Şema Hazırlığı
+Yerel PostgreSQL 18 üzerinde `kademeli_egitim` veritabanını oluşturun ve `database/schema.sql` dosyasını çalıştırın (uygulama açılışında eksik tabloları da otomatik doğrular):
 
 ```bash
 psql -U postgres -h localhost -p 5432 -c "CREATE DATABASE kademeli_egitim WITH ENCODING 'UTF8';"
 psql -U postgres -h localhost -p 5432 -d kademeli_egitim -f database/schema.sql
 ```
 
-### 2. Yapılandırma (`appsettings.json`)
-Proje kök dizinindeki `appsettings.example.json` dosyasını `appsettings.json` olarak kopyalayın ve kendi yerel PostgreSQL parolanızı girin (`appsettings.json` güvenlik nedeniyle `.gitignore` içindedir):
+### 3. Bağlantı Yapılandırması (`appsettings.example.json` → `appsettings.json`)
+Proje kök dizinindeki `appsettings.example.json` dosyasını `appsettings.json` adıyla kopyalayın ve yerel PostgreSQL parolanızı girin (`appsettings.json` güvenlik gereği `.gitignore` içindedir):
+
+```powershell
+Copy-Item appsettings.example.json appsettings.json
+```
 
 ```json
 {
@@ -56,161 +71,104 @@ Proje kök dizinindeki `appsettings.example.json` dosyasını `appsettings.json`
 }
 ```
 
-### 3. Kaynaktan Derleme ve Çalıştırma
+### 4. Derleme, Çalıştırma ve Test
 ```bash
-git clone https://github.com/Mehmetaydin-sudo/kademeli-egitim-platformu.git
-cd kademeli-egitim-platformu
-dotnet build
-dotnet run
-```
+# Çözümü derle
+dotnet build KademeliEgitimPlatformu.slnx
 
-İlk açılışta `sorular` tablosu boşsa uygulama `Kolay`, `Orta` ve `Zor` seviyelerini kapsayan 23 soruluk varsayılan eğitim ve ara sınav havuzunu otomatik olarak PostgreSQL veritabanına tohumlar.
+# Uygulamayı başlat
+dotnet run --project KademeliEgitimPlatformu.csproj
 
----
-
-## 📊 Soru Havuzu ve İçe/Dışa Aktarım Biçimleri (`.docx` / `.pdf` / `.xlsx` / `.csv`)
-
-### Word (`.docx`) ve PDF (`.pdf`) Belge İçe Aktarma Biçimleri
-
-Ana menüdeki **Soru İçe Aktar** penceresi `.docx` ve `.pdf` belgelerini öncelikli olarak destekler ve veritabanına yazmadan önce önizleme ekranında doğrular:
-
-* **Klasik Test Formatı:** `1.`, `1)`, `Soru 1:` başlangıçları; `A)`, `A.`, `a)` … `D)` şıkları (alt alta veya aynı satırda); `Cevap: B`, `Doğru Cevap: B`, `Yanıt: B` satırları.
-* **Toplu Cevap Anahtarı:** Belge sonunda `Cevap Anahtarı: 1-B, 2-A` veya `1. B` / `2. A` biçimindeki cevap anahtarları soru numaralarıyla otomatik eşleştirilir.
-* **Opsiyonel Alanlar:** `Zorluk:` (`Kolay`/`Orta`/`Zor` — belirtilmezse varsayılan `Orta`), `Modül:` (belirtilmezse önizleme ekranında seçilen modül), `Açıklama:` / `Neden Yanlış:`, `Kod:` ve `Etiket:`.
-* **Word (`.docx`) Tablo Formatı:** `Soru | A | B | C | D | Cevap | Zorluk | Açıklama` sütunlarıyla hazırlanmış tablolar otomatik algılanır. Eksik şıklı veya cevapsız sorular sessizce atlanmaz; soru numarası ve sebebiyle uyarı listesinde gösterilir.
-
-### Excel (`.xlsx`) ve `.csv` Paket Biçimi
-
-Soru içe ve dışa aktarım işlemlerinde **Excel (`.xlsx`)** ve **`.csv`** formatları da desteklenir. Tablo sütun sırası aşağıdaki gibidir:
-
-| Sütun | Açıklama |
-| :--- | :--- |
-| `Disiplin` | `GorselProgramlama`, `VeriTabanlari`, `SiberGuvenlik` (veya `0`, `1`, `2`) |
-| `Zorluk` | `Kolay`, `Orta`, `Zor` (veya `0`, `1`, `2`) |
-| `Etiket` | Boş (normal sınav), `AraSinav`, `KolayOrtaAraSinav`, `OrtaZorAraSinav` |
-| `Baslik` | Soru metni (benzersizdir; aynı başlıklı soru tekrar eklenmez) |
-| `KodBlogu` | İsteğe bağlı örnek C# / SQL kod bloğu |
-| `SecenekA`..`SecenekD` | 4 adet şık metni (boş olamaz) |
-| `DogruSecenekIndex` | Doğru şık indeksi (`0` = A, `1` = B, `2` = C, `3` = D) |
-| `AciklamaA`..`AciklamaD` | Yanlış şıklar seçildiğinde gösterilecek pedagojik açıklamalar |
-
-### `SoruPaketleyici` Aracı Kullanımı
-
-PostgreSQL soru havuzunu `.xlsx` veya `.csv` olarak dışa aktarmak, doğrulayarak USB soru paketi üretmek veya içe aktarmak için:
-
-```bash
-# PostgreSQL soru havuzunu Excel (.xlsx) veya .csv olarak dışa aktar
-dotnet run --project tools/SoruPaketleyici -- disari-aktar Data/OrnekSorular.xlsx
-
-# Kaynak .xlsx / .csv dosyasını doğrulayıp USB soru paketi (.xlsx / .csv) üret
-dotnet run --project tools/SoruPaketleyici -- Data/OrnekSorular.xlsx Data/UsbSoruPaketi.xlsx
-
-# .xlsx veya .csv soru paketini PostgreSQL veritabanına içe aktar
-dotnet run --project tools/SoruPaketleyici -- ice-aktar Data/UsbSoruPaketi.xlsx
-```
-
----
-
-## 🗂️ Proje Yapısı
-
-```
-KademeliEgitimPlatformu/
-├── database/
-│   └── schema.sql                # PostgreSQL 18 veritabanı tablo ve indeks şeması
-├── Models/
-│   ├── Kullanici.cs              # Kullanıcı modeli (BCrypt sifre_hash ve rol)
-│   ├── Soru.cs                   # Soru, DisiplinTuru, ZorlukSeviyesi, Etiket
-│   ├── SinavTuru.cs              # Normal, AraSinav, KolayOrtaGecisSinavi, OrtaZorGecisSinavi
-│   ├── SoruGorunumu.cs           # Şık karıştırma + doğru cevap/açıklama eşlemesi
-│   └── YanlisKaydi.cs            # Hata karnesi kaydı
-├── Services/
-│   ├── VeritabaniBaglantisi.cs   # appsettings.json + Npgsql merkezi bağlantı yönetimi
-│   ├── KullaniciServisi.cs       # BCrypt.Net-Next ile kullanıcı kayıt/giriş/şifre güncelleme
-│   ├── SoruServisi.cs            # PostgreSQL soru havuzu + ClosedXML (.xlsx/.csv) aktarım
-│   ├── SoruDogrulayici.cs        # Soru alan, şık ve doğru cevap doğrulama kuralları
-│   ├── BelgeSoruDonusturucu.cs   # Çevrimdışı Word (.docx) ve PDF (.pdf) soru ayrıştırıcı
-│   ├── SoruKoruyucu.cs           # BCrypt.Net-Next parola/metin özetleme ve doğrulama yardımcısı
-│   ├── KademeServisi.cs          # Seviye Geçiş Ara Sınavı / Orta Mod / Zor Mod geçiş kuralları
-│   ├── ISoruDeposu.cs            # Soru veri erişim arayüzü
-│   ├── IIlerlemeDeposu.cs        # İlerleme ve seviye geçiş ara sınavı veri erişim arayüzü
-│   ├── IlerlemeServisi.cs        # PostgreSQL ilerleme ve seviye_gecis_sinavlari yönetimi
-│   ├── KarneServisi.cs           # PostgreSQL yanlış cevap kayıtları + karne raporu
-│   ├── PuanlamaServisi.cs        # Disiplin bazlı puanlama (saf fonksiyonlar)
-│   ├── SimulatorServisi.cs       # Roslyn tabanlı kod analizi
-│   ├── FontOnbellegi.cs          # GDI+ font önbelleği
-│   └── VeriYolu.cs               # Dışa aktarım ve yapılandırma dosya yolları
-├── tools/
-│   └── SoruPaketleyici/          # ClosedXML tabanlı .xlsx / .csv soru paketleme aracı
-├── BelgeOnizlemeFormu.cs         # .docx/.pdf soru önizleme, doğrulama ve onay ekranı
-├── BufferedPanel.cs              # Çift tamponlu panel (titremesiz çizim)
-├── Form1.cs                      # Çekirdek form, sidebar, ekran geçişi, kısayollar
-├── Form1.AnaMenu.cs              # Kontrol paneli, modül/zorluk kartları, .docx/.pdf/.xlsx/.csv içe aktarma
-├── Form1.Sinav.cs                # Sınav ve Seviye Geçiş Ara Sınavı akışı, puanlama
-├── Form1.Simulator.cs            # Roslyn simülatörü ve hata karnesi
-├── Form1.Designer.cs
-├── Program.cs                    # Giriş noktası + genel hata yakalama
-├── appsettings.example.json      # Örnek PostgreSQL bağlantı yapılandırması
-├── GEMINI.md                     # Proje ve mimari kuralları
-├── tests/
-│   └── KademeliEgitimPlatformu.Tests/   # xUnit birim ve entegrasyon testleri
-└── KademeliEgitimPlatformu.csproj
-```
-
-### Testleri Çalıştırma
-```bash
+# Tüm xUnit birim ve entegrasyon testlerini çalıştır
 dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
 ```
 
 ---
 
-## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+## 📄 Desteklenen Soru Yükleme Formatları
 
-### [v0.8.1 — Belge İçe Aktarma Geliştirmesi] — 2026-11-23
-* **[Word & PDF Soru Dönüştürücü (`DocumentFormat.OpenXml` + `UglyToad.PdfPig`)]** Son kullanıcıların `.xlsx` hazırlamak zorunda kalmadan `.docx` (paragraf + tablo) ve `.pdf` (sayfa sayfa Türkçe UTF-8) belgelerinden tamamen çevrimdışı soru yükleyebilmesi için `Services/BelgeSoruDonusturucu.cs` eklendi. Klasik test formatları, toplu cevap anahtarı (`1-B, 2-A` / `1. B`), opsiyonel `Zorluk:` / `Modül:` / `Açıklama:` alanları ve Word soru tabloları desteklenir; eksik şıklı veya cevapsız sorular soru numarası ve sebebiyle uyarı olarak raporlanır.
-* **[Merkezi Soru Doğrulama (`SoruDogrulayici`)]** `Services/SoruDogrulayici.cs` ile soru bütünlüğü kuralları tek merkezde toplandı ve eksik/hatalı alanlar için Türkçe gerekçe listesi üretildi.
-* **[Önizleme ve Kontrol Ekranı (`BelgeOnizlemeFormu`)]** `OpenFileDialog` filtresi `.docx`, `.pdf`, `.xlsx` ve `.csv` uzantılarının tamamını destekleyecek şekilde (`.docx` ve `.pdf` öncelikli) güncellendi. `.docx`/`.pdf` seçiminde veritabanına yazmadan önce önizleme ekranı açılır; hatalı sorular vurgulanır, varsayılan modül seçilebilir ve yalnızca onaylanan geçerli sorular PostgreSQL transaction içinde kaydedilir.
-* **[Birim Testleri]** `tests/KademeliEgitimPlatformu.Tests/BelgeSoruDonusturucuTests.cs` altına klasik test formatı, toplu cevap anahtarı, eksik şık/cevap uyarıları, Türkçe karakterler, gerçek `.docx` (tablo + paragraf), gerçek `.pdf` ve önizleme formu smoke testleri eklendi.
+### Word (`.docx`) ve PDF (`.pdf`)
+* **Soru Başlangıcı:** `1.`, `1)`, `Soru 1:` vb.
+* **Şıklar:** `A)`, `A.`, `a)` … `D)` / `D.` (alt alta veya aynı satırda).
+* **Doğru Cevap:** `Cevap: B`, `Doğru Cevap: B`, `Yanıt: B` satırları veya belge sonunda toplu cevap anahtarı (`Cevap Anahtarı: 1-B, 2-A` ya da `1. B` / `2. A`).
+* **Opsiyonel Alanlar:** `Zorluk:` (`Kolay`/`Orta`/`Zor` — varsayılan `Orta`), `Modül:` (yoksa önizleme ekranında seçilen modül), `Açıklama:` / `Neden Yanlış:`, `Kod:`, `Etiket:`.
+* **Word Tablosu:** `Soru | A | B | C | D | Cevap | Zorluk | Açıklama` sütunları otomatik algılanır.
 
-### [v0.8.1] — 2026-11-15
-* **[Dağıtım & İzin Güvenliği (`Program Files`)]** `Directory.GetCurrentDirectory()` kullanımları tamamen kaldırıldı; `appsettings.json`, `appsettings.example.json` ve `database/schema.sql` gibi salt-okunur dosyalar `AppContext.BaseDirectory` üzerinden okunacak şekilde sabitlendi. Çalışma zamanı log (`hata.log`) ve dışa aktarılan Excel/CSV (`.xlsx`, `.csv`) çıktıları `Environment.SpecialFolder.MyDocuments` (`Belgelerim\KademeliEgitimPlatformu`) klasörüne yönlendirildi.
-* **[Otomatik Şema Kontrolü (`Auto-Migration`)]** `VeritabaniBaglantisi.TablolariHazirla()` ve `EksikTablolariGetir()` ile uygulama açılışında `kademeli_egitim` veritabanının ve 7 zorunlu tablonun varlığı kontrol edilerek eksik tabloların `database/schema.sql` (`CREATE TABLE IF NOT EXISTS`) ile otomatik kurulması sağlandı.
-* **[Zenginleştirilmiş Başlangıç Verisi (`Seed Data`)]** İlk kurulumda `sorular` tablosu boş olduğunda `GorselProgramlama`, `VeriTabanlari` ve `SiberGuvenlik` disiplinlerinin tamamında `Kolay`, `Orta` ve `Zor` seviyelerini kapsayan 23 soruluk başlangıç havuzunun otomatik tohumlanması sağlandı.
-* **[Hata Dayanıklılığı]** PostgreSQL servisinin kapalı olması, hatalı şifre (`28P01`) veya eksik/bozuk `appsettings.json` durumlarında uygulamanın çökmesi engellenerek kullanıcıya çözüm adımlarını içeren Türkçe `MessageBox` uyarıları (`KullaniciDostuHataMesaji`) eklendi.
+### Excel (`.xlsx`) ve `.csv`
+Sütun sırası: `Disiplin`, `Zorluk`, `Etiket`, `Baslik`, `KodBlogu`, `SecenekA`, `SecenekB`, `SecenekC`, `SecenekD`, `DogruSecenekIndex`, `AciklamaA`, `AciklamaB`, `AciklamaC`, `AciklamaD`.
 
-### [v0.8.0] — 2026-11-15
-* **[Mimari / Veritabanı]** Yerel SQLite (`sorular.db`, `ilerleme.db`) yapısı tamamen kaldırılarak **PostgreSQL 18 (`localhost:5432`, `kademeli_egitim`, `Npgsql`)** mimarisine geçildi. Tüm tabloları ve indeksleri oluşturan `database/schema.sql` ile merkezi `VeritabaniBaglantisi` sınıfı eklendi.
-* **[Yapılandırma]** Bağlantı dizelerinin kod içine gömülmesi engellendi; `Microsoft.Extensions.Configuration.Json` ile `appsettings.json` dosyasından okunması sağlandı (`appsettings.json` `.gitignore` içine alındı ve `appsettings.example.json` şablonu eklendi).
-* **[Güvenlik]** `SHA256` ve `HMACSHA256` kullanımları tamamen kaldırıldı; `BCrypt.Net-Next` (`BCrypt.HashPassword` ve `BCrypt.Verify`) ile tuzlu (salted) parola özetleme uygulayan `KullaniciServisi` ve `SoruKoruyucu` sınıfları yazıldı.
-* **[Veri Aktarımı]** JSON ve `.dat` soru paketi formatları kaldırıldı; `ClosedXML` kütüphanesi ile **Excel (`.xlsx`)** ve **`.csv`** formatlarında soru içe/dışa aktarımı (`SoruServisi.DisaridanPaketYukle`, `DisariAktar`, `PaketOlustur`) ve `tools/SoruPaketleyici` desteği eklendi.
-* **[Kademeli Geçiş]** `Kolay -> Orta` (%70 baraj) ve `Orta -> Zor` (%75 baraj) geçişlerinde katı blokaj yerine **"Seviye Geçiş Ara Sınavı"** akışı uygulandı. Tüm ara sınav denemeleri PostgreSQL `seviye_gecis_sinavlari` tablosunda kayıt altına alınıyor; öğrenci ara sınavı geçmeden üst zorluk açılmıyor, geçtiğinde ise kilit kalıcı olarak açılıyor.
+---
 
-### [v0.7.0] — 2026-11-12
-* **[Güvenlik]** Soru havuzu artık düz metin dağıtılmıyor. `Data/Sorular.dat` paketi ve SQLite'taki `Veri` sütunu **AES-256-GCM** ile şifreleniyor; başlıklar **HMAC-SHA256** özetiyle saklanıyor.
-* **[Güvenlik]** Eski (v0.6 ve öncesi) düz metin `sorular.db` dosyaları ilk açılışta otomatik olarak şifreli şemaya yükseltiliyor; USB ile eklenmiş sorular ve kullanıcı ilerlemesi korunuyor.
-* **[Eklendi]** Her modül için 5 soruluk **ara sınav**: Görsel Programlama, Veri Tabanları ve Siber Güvenlik. Geçme barajı **%70**; sonuç kalıcı saklanıyor.
-* **[Eklendi]** Yeni kademe kuralları: üç ara sınavın tamamı geçilince **Orta Mod**, Orta Mod karma sınavı **%75** ile geçilince **Zor Mod** açılıyor.
-* **[Geliştirildi]** Veri erişim katmanını soyutlamak için `ISoruDeposu` ve `IIlerlemeDeposu` arayüzleri eklendi.
+## 👥 Ekip ve Katkı Rehberi
 
-### [v0.6.0] — 2026-11-11
-* **[Performans]** Ekranlar tembel oluşturuluyor: açılışta yalnızca ana menü kurulur; sınav ve simülatör ilk açılışta hazırlanır.
-* **[Performans]** Roslyn kod analizi `Task.Run` ile arka planda çalışıyor; analiz sırasında arayüz donmuyor.
-* **[Performans]** Panellerde çift tampon (`BufferedPanel`), `SuspendLayout/ResumeLayout` ve `ResizeRedraw` kullanılarak titreme azaltıldı.
+### Proje Ekibi
+* **Mehmet Aydın** ([@Mehmetaydin-sudo](https://github.com/Mehmetaydin-sudo)) — Proje Lideri, Yazılım Mimarisi & Veritabanı
+* **Yağız Domaç** — Arayüz (UI/UX) Tasarımı, Oyunlaştırma & Testler
+* **Ünal Küçük** — İçerik Mimarisi, Soru Havuzu & Pedagojik Açıklamalar
+* **İsmail Can Şal** — Modül Geliştirme, Senaryolar & Kalite Kontrol
 
-### [v0.5.0] — 2026-11-11
-* **[Eklendi]** Kod simülatörü Regex tahmininden **gerçek Roslyn derleyicisine** (`Microsoft.CodeAnalysis.CSharp`) taşındı.
-* **[Eklendi]** Soru bazlı kalıcı hata karnesi, şık karıştırma (`SoruGorunumu`), `1`–`4` ve `Enter` klavye kısayolları ve xUnit test paketi eklendi.
+### Branch ve Pull Request İş Akışı
+`main` dalı korumalıdır; doğrudan `main` dalına push veya merge yapılmaz. Tüm ekip üyeleri aşağıdaki akışı izler:
 
-### [v0.4.2] — 2026-11-10
-* **[Düzeltildi]** Disiplin bazlı puanlama, zorluk filtresi, satır numarası hizalama ve genel hata yakalama iyileştirmeleri yapıldı.
+1. **Güncel daldan yeni görev dalı açın:**
+   ```bash
+   git checkout main
+   git pull origin main
+   git checkout -b gorev/kisa-gorev-adi
+   ```
+   *(Örnek: `gorev/pdf-onizleme`, `gorev/karne-filtreleme`, `gorev/yeni-modul-ekleme`)*
+2. **Kurallara uygun geliştirme yapın:**
+   * `*.Designer.cs` dosyalarını açık onay olmadan düzenlemeyin; arayüz değişikliklerini ilgili formun `.cs` code-behind dosyasında yapın.
+   * Veritabanı işlemlerini `Services/` katmanı üzerinden, parametreli Npgsql sorguları ve `using` bloklarıyla yürütün.
+   * Proje kurallarının tamamı için [GEMINI.md](GEMINI.md) dosyasına bakın.
+3. **Derleme ve test doğrulaması yapın:**
+   ```bash
+   dotnet build KademeliEgitimPlatformu.slnx
+   dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.csproj
+   ```
+4. **Dalınızı pushlayın ve Pull Request açın:**
+   ```bash
+   git push -u origin gorev/kisa-gorev-adi
+   ```
+   * GitHub üzerinden `gorev/...` dalından `main` (veya aktif geliştirme dalına) Pull Request açın.
+   * CI (`Derle ve Test Et`) kontrollerinin yeşil geçmesini bekleyin ve `CODEOWNERS` kuralı gereği proje lideri **@Mehmetaydin-sudo** onayından sonra merge işlemini tamamlayın.
 
-### [v0.3.0] — 2026-11-09
-* **[Eklendi]** Sol yan navigasyon menüsü (Sidebar), özel çizimli parlak kart çerçeveleri, VS Code tarzı satır numaralı kod görüntüleyici ve canlı süre sayacı eklendi.
+---
 
-### [v0.2.0] — 2026-11-09
-* **[Eklendi]** `TableLayoutPanel` ve DPI ölçeklendirme ile 1080p Full HD tam ekran responsive tasarım, Gömülü Kod Simülatörü ve İpucu Jetonu eklendi.
+## 🗂️ Proje Yapısı
 
-### [v0.1.0] — 2026-11-09
-* **[Eklendi]** Windows Forms (.NET 8.0) proje iskeleti, `Models`/`Services` katmanlı mimarisi ve "Neden Yanlış Açıklaması" paneli oluşturuldu.
+```text
+KademeliEgitimPlatformu/
+├── database/
+│   └── schema.sql                       # PostgreSQL 18 tablo ve indeks şeması
+├── Models/                              # Soru, Kullanici, SinavTuru, SoruGorunumu, YanlisKaydi
+├── Services/
+│   ├── VeritabaniBaglantisi.cs          # appsettings.json + Npgsql merkezi bağlantı yönetimi
+│   ├── SoruServisi.cs                   # PostgreSQL soru havuzu + ClosedXML (.xlsx/.csv)
+│   ├── BelgeSoruDonusturucu.cs          # Çevrimdışı Word (.docx) ve PDF (.pdf) ayrıştırıcı
+│   ├── SoruDogrulayici.cs               # Merkezi soru alan/şık/cevap doğrulama kuralları
+│   ├── KademeServisi.cs                 # Kademeli seviye geçiş ve başarı barajı kuralları
+│   ├── IlerlemeServisi.cs               # İlerleme ve seviye geçiş ara sınav kayıtları
+│   ├── KarneServisi.cs                  # Yanlış cevap takibi ve performans karnesi raporu
+│   ├── KullaniciServisi.cs              # BCrypt.Net-Next tuzlu parola yönetimi
+│   ├── PuanlamaServisi.cs               # Başarı hesaplama servisi
+│   └── SimulatorServisi.cs              # Uygulamalı kod analizi bileşeni
+├── tools/SoruPaketleyici/               # CLI tabanlı .xlsx / .csv soru paketleyici
+├── tests/KademeliEgitimPlatformu.Tests/ # xUnit birim ve entegrasyon testleri
+├── BelgeOnizlemeFormu.cs                # .docx / .pdf önizleme ve doğrulama penceresi
+├── Form1.cs / Form1.AnaMenu.cs / Form1.Sinav.cs / Form1.Simulator.cs
+├── appsettings.example.json             # Örnek veritabanı yapılandırması
+└── KademeliEgitimPlatformu.csproj
+```
+
+---
+
+## 📌 Sürüm Özeti (Changelog)
+
+* **v0.8.2 (Güncel):** Genel sağlık kontrolü ve kararlılık iyileştirmeleri — `.docx`/`.pdf`/`.xlsx`/`.csv` içe aktarma ve önizleme modül değişiminde asenkron (`Task.Run`) işleme ile UI donma koruması, Türkçe Windows Excel ANSI (`Windows-1254`) `.csv` otomatik kodlama tespiti ve açık dosya (`FileShare.ReadWrite`) desteği, taranmış/boş PDF ile veri satırsız Word tablosu uyarıları, karne dışa aktarma hata yönetimi ve 75/75 xUnit regresyon testi.
+* **v0.8.1:** Genel amaçlı **Kademeli Eğitim Platformu** konumlandırması; çevrimdışı Word (`.docx`) ve PDF (`.pdf`) soru dönüştürücü (`BelgeSoruDonusturucu`), merkezi `SoruDogrulayici`, kayıt öncesi önizleme ekranı (`BelgeOnizlemeFormu`), otomatik PostgreSQL şema kontrolü ve güvenli dosya yolu yönetimi.
+* **v0.8.0:** Yerel PostgreSQL 18 (`Npgsql`), `BCrypt.Net-Next` tuzlu parola güvenliği, `ClosedXML` (`.xlsx`/`.csv`) veri aktarımı ve Seviye Geçiş Ara Sınavı sistemi.
+* **v0.1.0 – v0.7.0:** WinForms (.NET 8) çekirdek arayüzü, kademeli zorluk kuralları, "Neden Yanlış?" pedagojik açıklamaları, hata karnesi ve xUnit test altyapısı.
 
 ---
 

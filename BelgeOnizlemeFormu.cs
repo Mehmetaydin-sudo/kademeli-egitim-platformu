@@ -4,6 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
 using KademeliEgitimPlatformu.Services;
@@ -31,10 +32,13 @@ namespace KademeliEgitimPlatformu
         /// <summary>Kullanıcının seçip onayladığı, SoruDogrulayici'dan geçmiş sorular.</summary>
         public List<Soru> OnaylananSorular { get; private set; } = new();
 
-        public BelgeOnizlemeFormu(string dosyaYolu, DisiplinTuru varsayilanDisiplin = DisiplinTuru.GorselProgramlama)
+        public BelgeOnizlemeFormu(
+            string dosyaYolu,
+            DisiplinTuru varsayilanDisiplin = DisiplinTuru.GorselProgramlama,
+            BelgeDonusturmeSonucu? hazirSonuc = null)
         {
             _dosyaYolu = dosyaYolu ?? throw new ArgumentNullException(nameof(dosyaYolu));
-            _sonuc = BelgeSoruDonusturucu.DosyadanDonustur(_dosyaYolu, varsayilanDisiplin);
+            _sonuc = hazirSonuc ?? BelgeSoruDonusturucu.DosyadanDonustur(_dosyaYolu, varsayilanDisiplin);
 
             ArayuzuOlustur(varsayilanDisiplin);
             SonuclariTabloyaYukle();
@@ -357,23 +361,47 @@ namespace KademeliEgitimPlatformu
             return panel;
         }
 
-        private void VarsayilanModul_Degisti(object? sender, EventArgs e)
+        private async void VarsayilanModul_Degisti(object? sender, EventArgs e)
         {
             if (_cmbVarsayilanModul.SelectedItem is not ModulSecenegi secim)
                 return;
 
+            Cursor oncekiImlec = Cursor;
             try
             {
-                _sonuc = BelgeSoruDonusturucu.DosyadanDonustur(_dosyaYolu, secim.Disiplin);
+                Cursor = Cursors.WaitCursor;
+                _cmbVarsayilanModul.Enabled = false;
+                _btnKaydet.Enabled = false;
+                _lblOzet.Text = "Belge yeni varsayılan modülle yeniden ayrıştırılıyor...";
+
+                BelgeDonusturmeSonucu yeniSonuc = await Task.Run(
+                    () => BelgeSoruDonusturucu.DosyadanDonustur(_dosyaYolu, secim.Disiplin));
+
+                if (IsDisposed)
+                    return;
+
+                _sonuc = yeniSonuc;
                 SonuclariTabloyaYukle();
             }
             catch (Exception ex)
             {
-                MessageBox.Show(
-                    "Belge yeni modül seçimiyle yeniden okunurken hata oluştu.\n\n" + ex.Message,
-                    "Yeniden Okuma Hatası",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Error);
+                if (!IsDisposed)
+                {
+                    MessageBox.Show(
+                        "Belge yeni modül seçimiyle yeniden okunurken hata oluştu.\n\n" + ex.Message,
+                        "Yeniden Okuma Hatası",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+            }
+            finally
+            {
+                if (!IsDisposed)
+                {
+                    Cursor = oncekiImlec;
+                    _cmbVarsayilanModul.Enabled = true;
+                    OzetVeButonGuncelle();
+                }
             }
         }
 

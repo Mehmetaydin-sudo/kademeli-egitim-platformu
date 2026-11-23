@@ -281,6 +281,57 @@ Açıklama: Türkçe ç, ğ, ı, İ, ö, ş, ü karakterleri kayıpsız korunmal
         }
 
         [Fact]
+        public void BozukVeyaBosBelgeDosyalari_AnlasilirInvalidDataExceptionFirlatiyor()
+        {
+            string geciciKlasor = Path.Combine(Path.GetTempPath(), "kademeli-bozuk-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(geciciKlasor);
+
+            try
+            {
+                string bosDocx = Path.Combine(geciciKlasor, "bos.docx");
+                string bozukPdf = Path.Combine(geciciKlasor, "bozuk.pdf");
+                File.WriteAllBytes(bosDocx, Array.Empty<byte>());
+                File.WriteAllText(bozukPdf, "bu gercek bir pdf degildir");
+
+                Assert.Throws<InvalidDataException>(() => BelgeSoruDonusturucu.DosyadanDonustur(bosDocx));
+                Assert.Throws<InvalidDataException>(() => BelgeSoruDonusturucu.DosyadanDonustur(bozukPdf));
+            }
+            finally
+            {
+                try { Directory.Delete(geciciKlasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
+        public void YalnizcaBaslikSatiriIcerenDocxTablosu_SessizGecmezUyariUretir()
+        {
+            string geciciKlasor = Path.Combine(Path.GetTempPath(), "kademeli-bostablo-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(geciciKlasor);
+            string docxYolu = Path.Combine(geciciKlasor, "bos_tablo.docx");
+
+            try
+            {
+                using (WordprocessingDocument doc = WordprocessingDocument.Create(docxYolu, WordprocessingDocumentType.Document))
+                {
+                    MainDocumentPart mainPart = doc.AddMainDocumentPart();
+                    mainPart.Document = new Document(new Body());
+                    var tablo = new Table();
+                    tablo.AppendChild(TabloSatiri("Soru", "A", "B", "C", "D", "Cevap"));
+                    mainPart.Document.Body!.AppendChild(tablo);
+                    mainPart.Document.Save();
+                }
+
+                BelgeDonusturmeSonucu sonuc = BelgeSoruDonusturucu.DosyadanDonustur(docxYolu);
+                Assert.Empty(sonuc.Kayitlar);
+                Assert.Contains(sonuc.Uyarilar, u => u.Sebep.Contains("veri satırı bulunamadı"));
+            }
+            finally
+            {
+                try { Directory.Delete(geciciKlasor, recursive: true); } catch { }
+            }
+        }
+
+        [Fact]
         public void BelgeOnizlemeFormu_DocxIleOlusturulabilir()
         {
             string geciciKlasor = Path.Combine(Path.GetTempPath(), "kademeli-ui-" + Guid.NewGuid().ToString("N"));
