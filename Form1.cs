@@ -113,6 +113,7 @@ namespace KademeliEgitimPlatformu
                 _lblSureSayaci.Text = $"⏱️ {dk:00}:{sn:00}   ";
             };
             ArayuzuOlustur();
+            KisisellestirmeModulunuBagla();
         }
 
         private void KaliciIlerlemeyiYukle()
