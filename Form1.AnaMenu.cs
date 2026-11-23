@@ -44,12 +44,12 @@ namespace KademeliEgitimPlatformu
 
             Button btnUsbPaketYukle = new()
             {
-                Text = "📥 Soru İçe Aktar (.xlsx / .csv)",
-                Font = FontOnbellegi.Al("Segoe UI", 10f, FontStyle.Bold),
+                Text = "📥 Soru İçe Aktar (.docx / .pdf / .xlsx / .csv)",
+                Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold),
                 BackColor = Color.FromArgb(30, 41, 59),
                 ForeColor = Color.FromArgb(125, 211, 252),
                 FlatStyle = FlatStyle.Flat,
-                Size = new Size(255, 44),
+                Size = new Size(330, 44),
                 Dock = DockStyle.Right,
                 Cursor = Cursors.Hand
             };
@@ -473,8 +473,14 @@ namespace KademeliEgitimPlatformu
 
             using OpenFileDialog ofd = new()
             {
-                Title = "Soru Dosyası Seçin (.xlsx veya .csv)",
-                Filter = "Soru Dosyası (*.xlsx;*.csv)|*.xlsx;*.csv|Excel Dosyası (*.xlsx)|*.xlsx|CSV Dosyası (*.csv)|*.csv",
+                Title = "Soru Dosyası Seçin (.docx, .pdf, .xlsx veya .csv)",
+                Filter = "Soru Belgeleri (*.docx;*.pdf;*.xlsx;*.csv)|*.docx;*.pdf;*.xlsx;*.csv|" +
+                         "Word ve PDF Belgeleri (*.docx;*.pdf)|*.docx;*.pdf|" +
+                         "Word Belgesi (*.docx)|*.docx|" +
+                         "PDF Belgesi (*.pdf)|*.pdf|" +
+                         "Excel Dosyası (*.xlsx)|*.xlsx|" +
+                         "CSV Dosyası (*.csv)|*.csv",
+                FilterIndex = 1,
                 InitialDirectory = Directory.Exists(belgelerim) ? belgelerim : string.Empty
             };
 
@@ -483,13 +489,38 @@ namespace KademeliEgitimPlatformu
 
             try
             {
-                int eklenen = SoruDeposu.DisaridanPaketYukle(ofd.FileName);
+                string uzanti = Path.GetExtension(ofd.FileName).ToLowerInvariant();
+                if (uzanti is ".docx" or ".pdf")
+                {
+                    using var onizleme = new BelgeOnizlemeFormu(ofd.FileName);
+                    if (onizleme.ShowDialog(this) != DialogResult.OK || onizleme.OnaylananSorular.Count == 0)
+                        return;
+
+                    int onayliAdet = onizleme.OnaylananSorular.Count;
+                    int eklenen = SoruDeposu.SorulariVeritabaninaAktar(onizleme.OnaylananSorular);
+                    int mevcutOlduguIcinAtlanan = Math.Max(0, onayliAdet - eklenen);
+                    string mukerrerBilgi = mevcutOlduguIcinAtlanan > 0
+                        ? $"\nVeritabanında Zaten Bulunduğu İçin Atlanan: {mevcutOlduguIcinAtlanan}"
+                        : "";
+
+                    MessageBox.Show(
+                        $"Onaylanan sorular PostgreSQL veri tabanına aktarıldı!\n\n" +
+                        $"Yeni Eklenen Soru Sayısı: {eklenen}{mukerrerBilgi}\n" +
+                        $"Toplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
+                        "Belgeden Soru İçe Aktarma Başarılı",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Information);
+                    AnaMenuyuCiz();
+                    return;
+                }
+
+                int paketEklenen = SoruDeposu.DisaridanPaketYukle(ofd.FileName);
                 string atlananBilgi = SoruDeposu.SonPaketAtlananSayisi > 0
                     ? $"\nGeçersiz Olduğu İçin Atlanan: {SoruDeposu.SonPaketAtlananSayisi}"
                     : "";
 
                 MessageBox.Show(
-                    $"Sorular PostgreSQL veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {eklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
+                    $"Sorular PostgreSQL veri tabanına aktarıldı!\n\nYeni Eklenen Soru Sayısı: {paketEklenen}{atlananBilgi}\nToplam Soru Havuzu: {SoruDeposu.SoruSayisi()}",
                     "Soru İçe Aktarma Başarılı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

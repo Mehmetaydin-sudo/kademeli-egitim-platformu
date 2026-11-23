@@ -23,5 +23,8 @@ namespace KademeliEgitimPlatformu.Services
         List<Soru> SeviyeGecisSorulariniGetir(ZorlukSeviyesi hedefZorluk);
 
         int DisaridanPaketYukle(string secilenDosyaYolu);
+
+        /// <summary>Doğrulanmış soru listesini tek bir transaction içinde veritabanına aktarır.</summary>
+        int SorulariVeritabaninaAktar(IEnumerable<Soru> yeniSorular, bool mevcutlariGuncelle = false);
     }
 }
