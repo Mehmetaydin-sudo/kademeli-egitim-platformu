@@ -585,6 +585,29 @@ namespace KademeliEgitimPlatformu
             // Yanlış cevapları hata karnesi için kalıcı kaydet (rapor hatası sınavı engellemez).
             YanlislariKarneyeKaydet();
 
+            // Profil, XP, günlük görev ve son aktiviteleri gerçek sınav sonucuyla güncelle.
+            string dersKodu = _aktifSinavDisiplini switch
+            {
+                DisiplinTuru.GorselProgramlama => "GORSEL",
+                DisiplinTuru.VeriTabanlari => "SQL",
+                DisiplinTuru.SiberGuvenlik => "SIBER",
+                _ => "KARMA"
+            };
+            string sinavEtiket = _aktifSinavTuru switch
+            {
+                SinavTuru.AraSinav => "Modül ara sınavı tamamlandı",
+                SinavTuru.KolayOrtaGecisSinavi => "Kolay → Orta geçiş sınavı tamamlandı",
+                SinavTuru.OrtaZorGecisSinavi => "Orta → Zor geçiş sınavı tamamlandı",
+                _ => "Değerlendirme sınavı tamamlandı"
+            };
+            int kazanilanXp = (dogru * 10) + (basariYuzdesi >= 70 ? 25 : 5);
+            OyunEtkinligiKaydet(
+                string.Empty,
+                $"{sinavEtiket} (%{basariYuzdesi})",
+                kazanilanXp,
+                cozulenSoruSayisi: toplam,
+                dersKodu: dersKodu);
+
             if (_aktifSinavTuru == SinavTuru.AraSinav)
             {
                 bool araSinavGecti = KademeServisi.AraSinavGectiMi(dogru, toplam);

@@ -1,32 +1,56 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
+using Npgsql;
 
 namespace KademeliEgitimPlatformu.Services
 {
+    /// <summary>
+    /// Öğrenci profili, XP/seviye, rozet vitrini, günlük görev ve tema tercihlerini yönetir.
+    /// Tercihler birincil olarak PostgreSQL 'meta' tablosunda saklanır; veritabanı kapalıysa
+    /// yalnızca kullanıcıya özel yazılabilir VeriYolu.VeriKlasoru (Belgelerim) yedeği kullanılır.
+    /// </summary>
     public class KisisellestirmeServisi
     {
-        private static readonly string TercihDosyaYolu =
-            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "kullanici_tema_tercihi.json");
+        private const string VarsayilanMetaAnahtari = "kisisellestirme_tercihi";
 
-        private static readonly Dictionary<Control, float> OrijinalFontBoyutlari = new();
+        // Zayıf referans tablosu: Dispose edilen WinForms kontrolleri bellekte kilitlenmez.
+        private static readonly ConditionalWeakTable<Control, StrongBox<float>> OrijinalFontBoyutlari = new();
+
+        private readonly string? _baglantiMetni;
+        private readonly string _metaAnahtari;
+        private readonly string _yedekDosyaYolu;
+
+        public KisisellestirmeServisi(
+            string? ozelBaglantiDizesi = null,
+            string? metaAnahtari = null,
+            string? ozelYedekDosyaYolu = null)
+        {
+            _baglantiMetni = ozelBaglantiDizesi;
+            _metaAnahtari = string.IsNullOrWhiteSpace(metaAnahtari) ? VarsayilanMetaAnahtari : metaAnahtari.Trim();
+            _yedekDosyaYolu = string.IsNullOrWhiteSpace(ozelYedekDosyaYolu)
+                ? Path.Combine(VeriYolu.VeriKlasoru, "kullanici_tercihi.cfg")
+                : ozelYedekDosyaYolu;
+        }
 
         public List<string> AvatarSecenekleri { get; } = new()
         {
-            "👨‍💻", "👩‍💻", "🛡️", "🗄️", "🚀", "⚡", "🔐", "🧠",
-            "🐞", "🐧", "🤖", "🎯", "🔥", "💎", "🛰️", "🏆"
+            "🎓", "👨‍💻", "👩‍💻", "📚", "🧠", "🚀", "⚡", "🎯",
+            "🛡️", "🗄️", "🔬", "📐", "🔥", "💎", "🌟", "🏆"
         };
 
         public List<TemaPaleti> HazirTemalar { get; } = new()
         {
-            new("Koyu Klasik",      Color.FromArgb(30, 30, 30),    Color.FromArgb(37, 37, 38),    Color.FromArgb(45, 45, 48),    Color.FromArgb(0, 122, 204),   Color.FromArgb(241, 241, 241)),
+            new("Koyu Klasik",      Color.FromArgb(15, 23, 42),    Color.FromArgb(9, 13, 24),     Color.FromArgb(22, 32, 50),    Color.FromArgb(56, 189, 248),  Color.FromArgb(241, 245, 249)),
             new("Gece Mavisi",      Color.FromArgb(18, 25, 38),    Color.FromArgb(13, 19, 30),    Color.FromArgb(28, 38, 56),    Color.FromArgb(56, 189, 248),  Color.FromArgb(241, 245, 249)),
             new("Antrasit Gri",     Color.FromArgb(34, 36, 40),    Color.FromArgb(26, 28, 31),    Color.FromArgb(48, 51, 56),    Color.FromArgb(148, 163, 184), Color.FromArgb(244, 244, 246)),
             new("Zümrüt Koyu",      Color.FromArgb(17, 30, 27),    Color.FromArgb(12, 22, 20),    Color.FromArgb(26, 46, 42),    Color.FromArgb(16, 185, 129),  Color.FromArgb(236, 253, 245)),
@@ -93,16 +117,16 @@ namespace KademeliEgitimPlatformu.Services
             var liste = new List<TemaPaleti>(HazirTemalar);
             if (tercih?.OzelPaletler != null)
             {
-                foreach (var ozel in tercih.OzelPaletler)
+                foreach (OzelRenkPaleti ozel in tercih.OzelPaletler)
                 {
                     if (string.IsNullOrWhiteSpace(ozel.Ad)) continue;
                     liste.Add(new TemaPaleti(
                         ozel.Ad,
-                        HexToColor(ozel.ArkaPlanHex, Color.FromArgb(30, 30, 30)),
-                        HexToColor(ozel.SidebarHex, Color.FromArgb(37, 37, 38)),
-                        HexToColor(ozel.KartHex, Color.FromArgb(45, 45, 48)),
-                        HexToColor(ozel.VurguHex, Color.FromArgb(0, 122, 204)),
-                        HexToColor(ozel.YaziHex, Color.FromArgb(241, 241, 241)),
+                        HexToColor(ozel.ArkaPlanHex, Color.FromArgb(15, 23, 42)),
+                        HexToColor(ozel.SidebarHex, Color.FromArgb(9, 13, 24)),
+                        HexToColor(ozel.KartHex, Color.FromArgb(22, 32, 50)),
+                        HexToColor(ozel.VurguHex, Color.FromArgb(56, 189, 248)),
+                        HexToColor(ozel.YaziHex, Color.FromArgb(241, 245, 249)),
                         ozelMi: true
                     ));
                 }
@@ -117,7 +141,7 @@ namespace KademeliEgitimPlatformu.Services
 
             if (tercih != null && !string.IsNullOrWhiteSpace(tercih.VurguHex))
             {
-                var ozelVurgu = HexToColor(tercih.VurguHex, bulunan.Vurgu);
+                Color ozelVurgu = HexToColor(tercih.VurguHex, bulunan.Vurgu);
                 return new TemaPaleti(bulunan.Ad, bulunan.ArkaPlan, bulunan.Sidebar, bulunan.Kart, ozelVurgu, bulunan.Yazi, bulunan.OzelMi);
             }
 
@@ -141,21 +165,19 @@ namespace KademeliEgitimPlatformu.Services
                     YaziHex = "#F3F4F6"
                 };
             }
-            else
+
+            Color acikArka = Karistir(Color.FromArgb(242, 245, 248), secilenRenk, 0.12);
+            Color acikSidebar = Karistir(Color.FromArgb(228, 233, 240), secilenRenk, 0.16);
+            Color acikKart = Karistir(Color.FromArgb(250, 252, 255), secilenRenk, 0.08);
+            return new OzelRenkPaleti
             {
-                Color arkaPlan = Karistir(Color.FromArgb(242, 245, 248), secilenRenk, 0.12);
-                Color sidebar = Karistir(Color.FromArgb(228, 233, 240), secilenRenk, 0.16);
-                Color kart = Karistir(Color.FromArgb(250, 252, 255), secilenRenk, 0.08);
-                return new OzelRenkPaleti
-                {
-                    Ad = ad,
-                    ArkaPlanHex = ColorToHex(arkaPlan),
-                    SidebarHex = ColorToHex(sidebar),
-                    KartHex = ColorToHex(kart),
-                    VurguHex = ColorToHex(secilenRenk),
-                    YaziHex = "#1E242B"
-                };
-            }
+                Ad = ad,
+                ArkaPlanHex = ColorToHex(acikArka),
+                SidebarHex = ColorToHex(acikSidebar),
+                KartHex = ColorToHex(acikKart),
+                VurguHex = ColorToHex(secilenRenk),
+                YaziHex = "#1E242B"
+            };
         }
 
         private static Color Karistir(Color taban, Color hedef, double oran)
@@ -177,18 +199,19 @@ namespace KademeliEgitimPlatformu.Services
 
         public static bool ParlakMi(Color c) => (c.R * 0.299 + c.G * 0.587 + c.B * 0.114) > 155;
 
+        // ==================== KALICI VERİTABANI + GÜVENLİ YEDEK YÜKLEME / KAYDETME ====================
+        /// <summary>
+        /// Tercihleri PostgreSQL 'meta' tablosundan yükler; veritabanı kapalıysa
+        /// kullanıcının yazılabilir Belgelerim klasöründeki yedekten okur.
+        /// </summary>
         public KullaniciTemaTercihi TercihiYukle()
         {
-            KullaniciTemaTercihi tercih = new();
-            try
-            {
-                if (File.Exists(TercihDosyaYolu))
-                {
-                    string json = File.ReadAllText(TercihDosyaYolu);
-                    tercih = JsonSerializer.Deserialize<KullaniciTemaTercihi>(json) ?? new KullaniciTemaTercihi();
-                }
-            }
-            catch { }
+            KullaniciTemaTercihi? tercih = VeritabanindanOku();
+
+            if (tercih == null)
+                tercih = YedektenOku();
+
+            tercih ??= new KullaniciTemaTercihi();
 
             tercih.OzelPaletler ??= new List<OzelRenkPaleti>();
             tercih.GunlukGorevler ??= new List<GunlukGorev>();
@@ -201,20 +224,134 @@ namespace KademeliEgitimPlatformu.Services
             return tercih;
         }
 
+        /// <summary>
+        /// Tercihleri PostgreSQL 'meta' tablosuna parametreli sorguyla kaydeder;
+        /// veritabanına erişilemezse kullanıcının Belgelerim\KademeliEgitimPlatformu klasörüne yazar.
+        /// Program Files (BaseDirectory) altına asla yazmaz.
+        /// </summary>
         public void TercihiKaydet(KullaniciTemaTercihi tercih)
+        {
+            ArgumentNullException.ThrowIfNull(tercih);
+
+            string icerik = JsonSerializer.Serialize(tercih);
+            bool veritabaninaYazildi = VeritabaninaYaz(icerik);
+
+            if (!veritabaninaYazildi)
+                YedegeYaz(icerik);
+        }
+
+        /// <summary>Testler için ilgili meta anahtarını veritabanından ve yedek dosyadan temizler.</summary>
+        public void Temizle()
         {
             try
             {
-                string json = JsonSerializer.Serialize(tercih, new JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(TercihDosyaYolu, json);
+                using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+                using var komut = new NpgsqlCommand("DELETE FROM meta WHERE anahtar = @anahtar;", baglanti);
+                komut.Parameters.AddWithValue("@anahtar", _metaAnahtari);
+                komut.ExecuteNonQuery();
             }
-            catch { }
+            catch
+            {
+                // Veritabanı kapalıysa yalnızca yerel yedeği temizle.
+            }
+
+            try
+            {
+                if (File.Exists(_yedekDosyaYolu))
+                    File.Delete(_yedekDosyaYolu);
+            }
+            catch
+            {
+            }
         }
 
-        public void GunlukDurumuSenkronizeEt(KullaniciTemaTercihi tercih)
+        private KullaniciTemaTercihi? VeritabanindanOku()
         {
-            string bugun = DateTime.Today.ToString("yyyy-MM-dd");
-            string dun = DateTime.Today.AddDays(-1).ToString("yyyy-MM-dd");
+            try
+            {
+                VeritabaniBaglantisi.TablolariHazirla(_baglantiMetni);
+                using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+                using var komut = new NpgsqlCommand("SELECT deger FROM meta WHERE anahtar = @anahtar;", baglanti);
+                komut.Parameters.AddWithValue("@anahtar", _metaAnahtari);
+
+                object? sonuc = komut.ExecuteScalar();
+                if (sonuc is string metin && !string.IsNullOrWhiteSpace(metin))
+                    return JsonSerializer.Deserialize<KullaniciTemaTercihi>(metin);
+            }
+            catch
+            {
+                // PostgreSQL kapalıysa sessizce yedek dosyaya düşülür.
+            }
+
+            return null;
+        }
+
+        private bool VeritabaninaYaz(string icerik)
+        {
+            try
+            {
+                VeritabaniBaglantisi.TablolariHazirla(_baglantiMetni);
+                using var baglanti = VeritabaniBaglantisi.Ac(_baglantiMetni);
+                using var islem = baglanti.BeginTransaction();
+
+                const string sql = @"
+                    INSERT INTO meta (anahtar, deger)
+                    VALUES (@anahtar, @deger)
+                    ON CONFLICT (anahtar) DO UPDATE SET deger = EXCLUDED.deger;";
+
+                using var komut = new NpgsqlCommand(sql, baglanti, islem);
+                komut.Parameters.AddWithValue("@anahtar", _metaAnahtari);
+                komut.Parameters.AddWithValue("@deger", icerik);
+                komut.ExecuteNonQuery();
+
+                islem.Commit();
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private KullaniciTemaTercihi? YedektenOku()
+        {
+            try
+            {
+                if (File.Exists(_yedekDosyaYolu))
+                {
+                    string metin = File.ReadAllText(_yedekDosyaYolu, Encoding.UTF8);
+                    return JsonSerializer.Deserialize<KullaniciTemaTercihi>(metin);
+                }
+            }
+            catch
+            {
+            }
+
+            return null;
+        }
+
+        private void YedegeYaz(string icerik)
+        {
+            try
+            {
+                string guvenliYol = VeriYolu.GuvenliCiktiYolu(_yedekDosyaYolu);
+                string? klasor = Path.GetDirectoryName(guvenliYol);
+                if (!string.IsNullOrEmpty(klasor))
+                    Directory.CreateDirectory(klasor);
+
+                File.WriteAllText(guvenliYol, icerik, Encoding.UTF8);
+            }
+            catch
+            {
+            }
+        }
+
+        // ==================== GÜNLÜK SERİ, XP VE ROZET HESAPLAMA ====================
+        public void GunlukDurumuSenkronizeEt(KullaniciTemaTercihi tercih, DateTime? bugunTarih = null)
+        {
+            DateTime referansGun = (bugunTarih ?? DateTime.Today).Date;
+            string bugun = referansGun.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            string dun = referansGun.AddDays(-1).ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
 
             if (tercih.SonCalismaGunu != bugun)
             {
@@ -232,7 +369,6 @@ namespace KademeliEgitimPlatformu.Services
                 tercih.ToplamCalismaDakikasi += 1;
             }
 
-            // Son 14 günü tut
             tercih.HaftalikGecmis = tercih.HaftalikGecmis
                 .OrderByDescending(g => g.TarihAnahtari)
                 .Take(14)
@@ -243,9 +379,9 @@ namespace KademeliEgitimPlatformu.Services
                 tercih.GorevGunu = bugun;
                 tercih.GunlukGorevler = new List<GunlukGorev>
                 {
-                    new() { Kod = "SQL_5", Baslik = "5 Veri Tabanı sorusu çöz", Mevcut = 0, Hedef = 5, XpOdulu = 25 },
-                    new() { Kod = "SIBER_TEST", Baslik = "Bir Siber Güvenlik testi tamamla", Mevcut = 0, Hedef = 1, XpOdulu = 30 },
-                    new() { Kod = "SIMULATOR_1", Baslik = "Kod Simülatöründe bir görev bitir", Mevcut = 0, Hedef = 1, XpOdulu = 20 }
+                    new() { Kod = "SORU_5", Baslik = "Herhangi bir sınavda 5 soru çöz", Mevcut = 0, Hedef = 5, XpOdulu = 25 },
+                    new() { Kod = "SINAV_1", Baslik = "Bir değerlendirme sınavını tamamla", Mevcut = 0, Hedef = 1, XpOdulu = 30 },
+                    new() { Kod = "SIMULATOR_1", Baslik = "Uygulamalı simülatörde bir görev bitir", Mevcut = 0, Hedef = 1, XpOdulu = 20 }
                 };
             }
 
@@ -263,7 +399,6 @@ namespace KademeliEgitimPlatformu.Services
         public (int ToplamXp, int Seviye, string SeviyeUnvani, int MevcutSeviyeXp, int SonrakiSeviyeGereken, string SonrakiSeviyeUnvani)
             XpVeSeviyeHesapla(KullaniciTemaTercihi tercih, int gorselBasari, int veriTabaniBasari, int siberBasari, bool ortaModGecti, bool simulatorOduluAlindi)
         {
-            // Gerçek ders ilerlemesinden temel XP + kazanılan etkinlik XP'si
             int ilerlemeXp = (gorselBasari + veriTabaniBasari + siberBasari) * 4
                            + (ortaModGecti ? 150 : 0)
                            + (simulatorOduluAlindi ? 200 : 0);
@@ -285,13 +420,13 @@ namespace KademeliEgitimPlatformu.Services
 
         private static string SeviyeUnvaniGetir(int seviye) => seviye switch
         {
-            1 => "Kod Çırağı",
-            2 => "Algoritma Kaşifi",
-            3 => "Veri Analisti",
-            4 => "Sistem Geliştiricisi",
-            5 => "Güvenlik Uzmanı",
-            6 => "Yazılım Mimarı",
-            _ => "Efsane Mühendis"
+            1 => "Başlangıç Öğrencisi",
+            2 => "Meraklı Kaşif",
+            3 => "Azimli Araştırmacı",
+            4 => "İleri Uygulayıcı",
+            5 => "Alan Uzmanı",
+            6 => "Usta Mentor",
+            _ => "Efsane Öğrenen"
         };
 
         public List<RozetBilgisi> RozetleriHesapla(
@@ -307,22 +442,22 @@ namespace KademeliEgitimPlatformu.Services
 
             return new List<RozetBilgisi>
             {
-                DersRozetiOlustur("GORSEL", "Kod Mimarı", "💻", gorselBasari,
-                    "Form Çırağı", "Arayüz Geliştirici", "Mimari Tasarımcı", "C# Arayüz Ustası",
+                DersRozetiOlustur("GORSEL", "Modül 1 Ustası", "💻", gorselBasari,
+                    "Temel Aday", "Gelişen Öğrenci", "İleri Uygulayıcı", "Görsel Programlama Ustası",
                     "Görsel Programlama modülünde %25, %50, %75 ve %90 başarıya ulaş."),
 
-                DersRozetiOlustur("SQL", "SQL Ustası", "🗄️", veriTabaniBasari,
-                    "Tablo Kaşifi", "SQL Uzmanı", "Veri Mimarı", "PostgreSQL Ustası",
-                    "Veri Tabanı modülünde %25, %50, %75 ve %90 başarıya ulaş."),
+                DersRozetiOlustur("SQL", "Modül 2 Ustası", "🗄️", veriTabaniBasari,
+                    "Veri Kaşifi", "Sorgu Uzmanı", "Veri Mimarı", "Veri Tabanı Ustası",
+                    "Veri Tabanları modülünde %25, %50, %75 ve %90 başarıya ulaş."),
 
-                DersRozetiOlustur("SIBER", "Güvenlikçi", "🛡️", siberBasari,
-                    "Güvenlik Gözcüsü", "Kripto Analisti", "Zafiyet Avcısı", "Siber Savunma Lideri",
+                DersRozetiOlustur("SIBER", "Modül 3 Ustası", "🛡️", siberBasari,
+                    "Güvenlik Gözcüsü", "Risk Analisti", "Savunma Uzmanı", "Siber Güvenlik Lideri",
                     "Siber Güvenlik modülünde %25, %50, %75 ve %90 başarıya ulaş."),
 
                 SimulasyonRozetiOlustur(ortaModGecti, simulatorOduluAlindi, ortalama),
 
                 SayiRozetiOlustur("SORU", "Bilgi Avcısı", "🎯", cozulenSoru, 10, 30, 75, 150,
-                    "Soru Çırağı", "Test Çözücü", "Bilgi Avcısı", "Soru Makinesi",
+                    "Soru Çırağı", "Test Çözücü", "Bilgi Avcısı", "Soru Ustası",
                     "Sınavlarda toplam 10, 30, 75 ve 150 soru çözerek kademe atla."),
 
                 SayiRozetiOlustur("SERI", "Seri Ustası", "🔥", tercih.GunlukSeri, 2, 5, 14, 30,
@@ -330,7 +465,7 @@ namespace KademeliEgitimPlatformu.Services
                     "Üst üste 2, 5, 14 ve 30 farklı gün uygulamada çalış."),
 
                 SayiRozetiOlustur("SURE", "Zaman Yolcusu", "⏱️", tercih.ToplamCalismaDakikasi, 15, 60, 180, 600,
-                    "Odaklanmış", "Çalışkan Geliştirici", "Zaman Ustası", "Maraton Mühendisi",
+                    "Odaklanmış", "Çalışkan Öğrenci", "Zaman Ustası", "Maraton Şampiyonu",
                     "Toplam 15 dk, 1 saat, 3 saat ve 10 saat çalışma süresine ulaş."),
 
                 EfsaneRozetiOlustur(gorselBasari, veriTabaniBasari, siberBasari, simulatorOduluAlindi)
@@ -350,15 +485,15 @@ namespace KademeliEgitimPlatformu.Services
 
         private static RozetBilgisi SimulasyonRozetiOlustur(bool ortaModGecti, bool simulatorOduluAlindi, int ortalama)
         {
-            const string nasil = "Orta -> Zor geçiş sınavını geç ve Gömülü Kod Simülatörü görevini tamamla.";
+            const string nasil = "Orta -> Zor geçiş sınavını geç ve Uygulamalı Simülatör görevini tamamla.";
             if (simulatorOduluAlindi && ortalama >= 85)
-                return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 100, Kademe = RozetKademesi.Elmas, Unvan = "Derleyici Ustası", Aciklama = "Simülatör + %85 ort.", NasilKazanilir = nasil };
+                return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 100, Kademe = RozetKademesi.Elmas, Unvan = "Simülasyon Ustası", Aciklama = "Simülatör + %85 ort.", NasilKazanilir = nasil };
             if (simulatorOduluAlindi)
                 return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 75, Kademe = RozetKademesi.Altin, Unvan = "Hata Avcısı", Aciklama = "Simülatör tamamlandı", NasilKazanilir = nasil };
             if (ortaModGecti)
                 return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 50, Kademe = RozetKademesi.Gumus, Unvan = "Simülatör Adayı", Aciklama = "Zor mod kilidi açık", NasilKazanilir = nasil };
             if (ortalama >= 20)
-                return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 25, Kademe = RozetKademesi.Bronz, Unvan = "Kod Çırağı", Aciklama = "Geçiş sınavını çöz", NasilKazanilir = nasil };
+                return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 25, Kademe = RozetKademesi.Bronz, Unvan = "Uygulama Çırağı", Aciklama = "Geçiş sınavını çöz", NasilKazanilir = nasil };
             return new RozetBilgisi { Kod = "SIM", SeriAdi = "Hata Avcısı", KategoriIkon = "🐞", IlerlemeYuzdesi = 0, Kademe = RozetKademesi.Kilitli, Unvan = "Kilitli", Aciklama = "Zor mod kilidini aç", NasilKazanilir = nasil };
         }
 
@@ -376,20 +511,31 @@ namespace KademeliEgitimPlatformu.Services
 
         private static RozetBilgisi EfsaneRozetiOlustur(int gorsel, int vt, int siber, bool sim)
         {
-            const string nasil = "Tüm derslerde en az %75 başarıya ulaş ve Kod Simülatörünü tamamla.";
+            const string nasil = "Tüm modüllerde en az %75 başarıya ulaş ve Simülatör görevini tamamla.";
             int ort = (gorsel + vt + siber) / 3;
             if (gorsel >= 90 && vt >= 90 && siber >= 90 && sim)
                 return new RozetBilgisi { Kod = "EFSANE", SeriAdi = "Efsane", KategoriIkon = "🏆", IlerlemeYuzdesi = 100, Kademe = RozetKademesi.Elmas, Unvan = "Platform Efsanesi", Aciklama = "Tüm platform fethedildi!", NasilKazanilir = nasil };
             if (gorsel >= 75 && vt >= 75 && siber >= 75 && sim)
-                return new RozetBilgisi { Kod = "EFSANE", SeriAdi = "Efsane", KategoriIkon = "🏆", IlerlemeYuzdesi = 85, Kademe = RozetKademesi.Altin, Unvan = "Tam Donanımlı", Aciklama = "Tüm dersler %75+ ve Simülatör", NasilKazanilir = nasil };
+                return new RozetBilgisi { Kod = "EFSANE", SeriAdi = "Efsane", KategoriIkon = "🏆", IlerlemeYuzdesi = 85, Kademe = RozetKademesi.Altin, Unvan = "Tam Donanımlı", Aciklama = "Tüm modüller %75+ ve Simülatör", NasilKazanilir = nasil };
             if (ort >= 50)
                 return new RozetBilgisi { Kod = "EFSANE", SeriAdi = "Efsane", KategoriIkon = "🏆", IlerlemeYuzdesi = ort, Kademe = RozetKademesi.Bronz, Unvan = "Yükselen Yıldız", Aciklama = $"Genel ortalama: %{ort}", NasilKazanilir = nasil };
             return new RozetBilgisi { Kod = "EFSANE", SeriAdi = "Efsane", KategoriIkon = "🏆", IlerlemeYuzdesi = ort, Kademe = RozetKademesi.Kilitli, Unvan = "Kilitli", Aciklama = $"Genel ortalama: %{ort}/%50", NasilKazanilir = nasil };
         }
 
-        public void TemayiFormUzerineUygula(Form form, Control sidebar, Control icerikAlani, KullaniciTemaTercihi tercih)
+        // ==================== TEMA VE FONT UYGULAMA (GDI+ SIZINTISIZ) ====================
+        /// <summary>
+        /// Seçili temayı form, sidebar ve kişiselleştirme paneline uygular;
+        /// FontOnbellegi kullanarak GDI+ handle sızıntısını önler ve diğer ekranların
+        /// durum renklerini (doğru/yanlış, aktif/pasif rozetler) bozmaz.
+        /// </summary>
+        public void TemayiFormUzerineUygula(
+            Form form,
+            Control sidebar,
+            Control icerikAlani,
+            Control kisisellestirmePaneli,
+            KullaniciTemaTercihi tercih)
         {
-            var tema = TemaBul(tercih.TemaAdi, tercih);
+            TemaPaleti tema = TemaBul(tercih.TemaAdi, tercih);
             float fontFarki = tercih.YaziBoyutuModu switch
             {
                 "Küçük" => -1.0f,
@@ -400,34 +546,58 @@ namespace KademeliEgitimPlatformu.Services
             form.BackColor = tema.ArkaPlan;
             sidebar.BackColor = tema.Sidebar;
             icerikAlani.BackColor = tema.ArkaPlan;
+            kisisellestirmePaneli.BackColor = tema.ArkaPlan;
 
-            RenkVeFontUygula(sidebar, tema, tercih.YaziTipi, fontFarki, sidebarMi: true);
-            RenkVeFontUygula(icerikAlani, tema, tercih.YaziTipi, fontFarki, sidebarMi: false);
+            // Sidebar ve Profil/Tema ekranına tam tema renkleri + önbellekli font uygulanır.
+            RenkVeFontUygula(sidebar, tema, tercih.YaziTipi, fontFarki, sidebarMi: true, renkleriUygula: true);
+            RenkVeFontUygula(kisisellestirmePaneli, tema, tercih.YaziTipi, fontFarki, sidebarMi: false, renkleriUygula: true);
+
+            // Diğer ana panellerde (Ana Menü, Sınav, Simülatör) yalnızca zemin rengi ve font güncellenir;
+            // yeşil/kırmızı/mavi durum rozetleri ve aksiyon buton renkleri korunur.
+            foreach (Control ekranPaneli in icerikAlani.Controls)
+            {
+                if (ekranPaneli == kisisellestirmePaneli)
+                    continue;
+
+                if (ekranPaneli is Panel && ekranPaneli.Tag?.ToString() != "SabitRenk")
+                    ekranPaneli.BackColor = tema.ArkaPlan;
+
+                RenkVeFontUygula(ekranPaneli, tema, tercih.YaziTipi, fontFarki, sidebarMi: false, renkleriUygula: false);
+            }
         }
 
-        private static void RenkVeFontUygula(Control kok, TemaPaleti tema, string fontAdi, float fontFarki, bool sidebarMi)
+        private static void RenkVeFontUygula(
+            Control kok,
+            TemaPaleti tema,
+            string fontAdi,
+            float fontFarki,
+            bool sidebarMi,
+            bool renkleriUygula)
         {
             foreach (Control ctrl in kok.Controls)
             {
-                string tag = ctrl.Tag?.ToString() ?? "";
+                string tag = ctrl.Tag?.ToString() ?? string.Empty;
 
+                // Kod bloklarında (Consolas) yazı tipini değiştirme, yalnızca boyut farkı uygula.
                 try
                 {
-                    if (ctrl.Font != null)
+                    if (ctrl.Font != null && !ctrl.Font.Name.Equals("Segoe UI Emoji", StringComparison.OrdinalIgnoreCase))
                     {
-                        if (!OrijinalFontBoyutlari.TryGetValue(ctrl, out float tabanBoyut))
-                        {
-                            tabanBoyut = ctrl.Font.Size;
-                            OrijinalFontBoyutlari[ctrl] = tabanBoyut;
-                        }
-                        float yeniBoyut = Math.Max(7.5f, tabanBoyut + fontFarki);
-                        if (ctrl.Font.Name != fontAdi || Math.Abs(ctrl.Font.Size - yeniBoyut) > 0.05f)
-                            ctrl.Font = new Font(fontAdi, yeniBoyut, ctrl.Font.Style);
+                        StrongBox<float> tabanKutu = OrijinalFontBoyutlari.GetValue(ctrl, c => new StrongBox<float>(c.Font.Size));
+                        float yeniBoyut = Math.Max(7.5f, tabanKutu.Value + fontFarki);
+                        string hedefFont = ctrl is RichTextBox && ctrl.Font.Name.Equals("Consolas", StringComparison.OrdinalIgnoreCase)
+                            ? "Consolas"
+                            : fontAdi;
+
+                        if (!ctrl.Font.Name.Equals(hedefFont, StringComparison.OrdinalIgnoreCase) || Math.Abs(ctrl.Font.Size - yeniBoyut) > 0.05f)
+                            ctrl.Font = FontOnbellegi.Al(hedefFont, yeniBoyut, ctrl.Font.Style);
                     }
                 }
-                catch { }
+                catch
+                {
+                }
 
-                if (tag != "SabitRenk")
+                if (renkleriUygula && tag != "SabitRenk")
                 {
                     if (ctrl is Button btn)
                     {
@@ -440,6 +610,7 @@ namespace KademeliEgitimPlatformu.Services
                         {
                             btn.BackColor = tema.Sidebar;
                             btn.ForeColor = tema.Yazi;
+                            btn.FlatAppearance.MouseOverBackColor = tema.Kart;
                         }
                         else
                         {
@@ -464,12 +635,15 @@ namespace KademeliEgitimPlatformu.Services
                 }
 
                 if (ctrl.HasChildren)
-                    RenkVeFontUygula(ctrl, tema, fontAdi, fontFarki, sidebarMi);
+                    RenkVeFontUygula(ctrl, tema, fontAdi, fontFarki, sidebarMi, renkleriUygula);
             }
         }
 
         public static void DuzKartCiz(Graphics g, Rectangle alan, Color kenarRengi, float kalinlik = 1.5f)
         {
+            if (alan.Width < 4 || alan.Height < 4)
+                return;
+
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using var kalem = new Pen(kenarRengi, kalinlik);
             g.DrawRectangle(kalem, 1, 1, alan.Width - 3, alan.Height - 3);

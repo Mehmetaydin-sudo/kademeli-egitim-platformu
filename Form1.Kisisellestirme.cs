@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
+using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
@@ -30,9 +31,10 @@ namespace KademeliEgitimPlatformu
         private Label _lblSeriVeJeton = new();
         private Button _btnProfilDuzenle = new();
         private Button _btnPngIndir = new();
+        private double _sonXpDolulukOrani = 0.05;
 
         // Sol Kolon Bileşenleri
-        private FlowLayoutPanel _flpDersIstatistikleri = new();
+        private TableLayoutPanel _tblDersIstatistikleri = new();
         private FlowLayoutPanel _flpRozetVitrini = new();
         private FlowLayoutPanel _flpTemaButonlari = new();
         private ComboBox _cmbYaziTipi = new();
@@ -53,58 +55,37 @@ namespace KademeliEgitimPlatformu
         private System.Windows.Forms.Timer _tmrCalismaSuresi = new();
 
         private KullaniciTemaTercihi _aktifTercih = new();
+        private bool _kisisellestirmeOlaylariBagli;
 
         private void KisisellestirmeModulunuBagla()
         {
             _aktifTercih = Kisisellestirme.TercihiYukle();
 
-            _btnMenuKisisellestirme.Text = "🎨 Profil && Rozetler";
-            _btnMenuKisisellestirme.FlatStyle = _btnMenuSimulator.FlatStyle;
-            _btnMenuKisisellestirme.FlatAppearance.BorderSize = _btnMenuSimulator.FlatAppearance.BorderSize;
-            _btnMenuKisisellestirme.BackColor = _btnMenuSimulator.BackColor;
-            _btnMenuKisisellestirme.ForeColor = _btnMenuSimulator.ForeColor;
-            _btnMenuKisisellestirme.Font = _btnMenuSimulator.Font;
-            _btnMenuKisisellestirme.TextAlign = _btnMenuSimulator.TextAlign;
-            _btnMenuKisisellestirme.Padding = _btnMenuSimulator.Padding;
-            _btnMenuKisisellestirme.Cursor = Cursors.Hand;
-
-            if (_btnMenuSimulator.Parent is FlowLayoutPanel flp)
-            {
-                _btnMenuKisisellestirme.Size = _btnMenuSimulator.Size;
-                _btnMenuKisisellestirme.Margin = _btnMenuSimulator.Margin;
-                flp.Controls.Add(_btnMenuKisisellestirme);
-            }
-            else if (_btnMenuSimulator.Parent != null)
-            {
-                _btnMenuKisisellestirme.SetBounds(
-                    _btnMenuSimulator.Left,
-                    _btnMenuSimulator.Bottom + 8,
-                    _btnMenuSimulator.Width,
-                    _btnMenuSimulator.Height);
-                _btnMenuSimulator.Parent.Controls.Add(_btnMenuKisisellestirme);
-            }
-
-            _btnMenuAna.Click += (_, _) => _pnlKisisellestirme.Visible = false;
-            _btnMenuSinav.Click += (_, _) => _pnlKisisellestirme.Visible = false;
-            _btnMenuSimulator.Click += (_, _) => _pnlKisisellestirme.Visible = false;
-            _btnMenuKisisellestirme.Click += (_, _) => KisisellestirmeEkraniniAc();
-
             _pnlKisisellestirme.Dock = DockStyle.Fill;
             _pnlKisisellestirme.AutoScroll = true;
-            _pnlKisisellestirme.AutoScrollMargin = new Size(0, 28);
+            _pnlKisisellestirme.AutoScrollMargin = new Size(0, 24);
             _pnlKisisellestirme.Visible = false;
-            _pnlKisisellestirme.Padding = new Padding(0);
+            _pnlKisisellestirme.Padding = new Padding(32, 22, 32, 24);
             _pnlKisisellestirme.Tag = "AnaBolum";
             _pnlIcerikAlani.Controls.Add(_pnlKisisellestirme);
 
             BasariBildirimiHazirla();
             CalismaSuresiSayaciniBaslat();
             KisisellestirmeArayuzunuInsaaEt();
-            Kisisellestirme.TemayiFormUzerineUygula(this, _pnlSidebar, _pnlIcerikAlani, _aktifTercih);
+            CanliUygula();
+        }
+
+        /// <summary>Form kapanırken zamanlayıcıları durdurup bellekten temizler.</summary>
+        private void KisisellestirmeTemizle()
+        {
+            _tmrBildirim.Stop();
+            _tmrBildirim.Dispose();
+            _tmrCalismaSuresi.Stop();
+            _tmrCalismaSuresi.Dispose();
         }
 
         /// <summary>
-        /// Sınav veya Simülatör modüllerinden çağrıldığında gerçek XP, görev, seri ve aktivite kaydı işler.
+        /// Sınav veya Simülatör modüllerinden çağrıldığında gerçek XP, günlük görev, seri ve aktivite kaydı işler.
         /// </summary>
         public void OyunEtkinligiKaydet(string olayAnahtari, string aciklama, int kazanilanXp, int cozulenSoruSayisi = 0, string? dersKodu = null)
         {
@@ -113,15 +94,17 @@ namespace KademeliEgitimPlatformu
             if (!string.IsNullOrWhiteSpace(olayAnahtari) && !_aktifTercih.OdullendirilenOlaylar.Add(olayAnahtari))
                 kazanilanXp = 0;
 
-            _aktifTercih.KazanilanEkstraXp += kazanilanXp;
-            _aktifTercih.ToplamCozulenSoru += cozulenSoruSayisi;
+            _aktifTercih.KazanilanEkstraXp += Math.Max(0, kazanilanXp);
+            _aktifTercih.ToplamCozulenSoru += Math.Max(0, cozulenSoruSayisi);
 
             string bugun = DateTime.Today.ToString("yyyy-MM-dd");
-            var gunKaydi = _aktifTercih.HaftalikGecmis.FirstOrDefault(g => g.TarihAnahtari == bugun);
-            if (gunKaydi != null) gunKaydi.CozulenSoru += cozulenSoruSayisi;
+            GunlukPerformans? gunKaydi = _aktifTercih.HaftalikGecmis.FirstOrDefault(g => g.TarihAnahtari == bugun);
+            if (gunKaydi != null) gunKaydi.CozulenSoru += Math.Max(0, cozulenSoruSayisi);
 
-            foreach (var gorev in _aktifTercih.GunlukGorevler)
+            foreach (GunlukGorev gorev in _aktifTercih.GunlukGorevler)
             {
+                if (gorev.Kod == "SORU_5" && cozulenSoruSayisi > 0) gorev.Mevcut += cozulenSoruSayisi;
+                if (gorev.Kod == "SINAV_1" && dersKodu != "SIM") gorev.Mevcut += 1;
                 if (gorev.Kod == "SQL_5" && dersKodu == "SQL") gorev.Mevcut += Math.Max(1, cozulenSoruSayisi);
                 if (gorev.Kod == "SIBER_TEST" && dersKodu == "SIBER") gorev.Mevcut += 1;
                 if (gorev.Kod == "SIMULATOR_1" && dersKodu == "SIM") gorev.Mevcut += 1;
@@ -151,8 +134,10 @@ namespace KademeliEgitimPlatformu
             _tmrCalismaSuresi.Interval = 60000;
             _tmrCalismaSuresi.Tick += (_, _) =>
             {
+                if (IsDisposed) return;
+
                 string bugun = DateTime.Today.ToString("yyyy-MM-dd");
-                var kayit = _aktifTercih.HaftalikGecmis.FirstOrDefault(g => g.TarihAnahtari == bugun);
+                GunlukPerformans? kayit = _aktifTercih.HaftalikGecmis.FirstOrDefault(g => g.TarihAnahtari == bugun);
                 if (kayit == null)
                 {
                     kayit = new GunlukPerformans { TarihAnahtari = bugun };
@@ -173,21 +158,21 @@ namespace KademeliEgitimPlatformu
 
         private void BasariBildirimiHazirla()
         {
-            _pnlBasariBildirimi.Size = new Size(370, 46);
-            _pnlBasariBildirimi.Location = new Point(Math.Max(20, _pnlIcerikAlani.ClientSize.Width - 395), 16);
+            _pnlBasariBildirimi.Size = new Size(390, 46);
+            _pnlBasariBildirimi.Location = new Point(Math.Max(20, _pnlIcerikAlani.ClientSize.Width - 415), 16);
             _pnlBasariBildirimi.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             _pnlBasariBildirimi.Visible = false;
             _pnlBasariBildirimi.Tag = "SabitRenk";
             _pnlBasariBildirimi.BackColor = Color.FromArgb(24, 28, 36);
             _pnlBasariBildirimi.Paint += (_, e) =>
             {
-                var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+                TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
                 KisisellestirmeServisi.DuzKartCiz(e.Graphics, _pnlBasariBildirimi.ClientRectangle, tema.Vurgu, 2f);
             };
 
             _lblBildirimMetni.Dock = DockStyle.Fill;
             _lblBildirimMetni.ForeColor = Color.White;
-            _lblBildirimMetni.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
+            _lblBildirimMetni.Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold);
             _lblBildirimMetni.TextAlign = ContentAlignment.MiddleCenter;
             _lblBildirimMetni.Tag = "SabitRenk";
 
@@ -204,6 +189,8 @@ namespace KademeliEgitimPlatformu
 
         private void BasariBildirimiGoster(string mesaj)
         {
+            if (IsDisposed) return;
+
             _lblBildirimMetni.Text = mesaj;
             _pnlBasariBildirimi.Location = new Point(Math.Max(20, _pnlIcerikAlani.ClientSize.Width - _pnlBasariBildirimi.Width - 24), 16);
             _pnlBasariBildirimi.Visible = true;
@@ -212,198 +199,240 @@ namespace KademeliEgitimPlatformu
             _tmrBildirim.Start();
         }
 
-        private void KisisellestirmeEkraniniAc()
-        {
-            foreach (Control ctrl in _pnlIcerikAlani.Controls)
-            {
-                ctrl.Visible = ctrl == _pnlKisisellestirme;
-            }
-            _pnlKisisellestirme.AutoScrollPosition = new Point(0, 0);
-            TumProfilVerileriniYenile();
-            _pnlKisisellestirme.BringToFront();
-        }
-
         private void KisisellestirmeArayuzunuInsaaEt()
         {
-            _pnlKisisellestirme.Controls.Clear();
+            _pnlKisisellestirme.SuspendLayout();
+            PanelTemizle(_pnlKisisellestirme);
 
-            var anaAkis = new FlowLayoutPanel
+            // Responsive üst kapsayıcı: 1024x700'den 1920x1080'e kadar tüm genişliğe yayılır.
+            var anaIzgara = new TableLayoutPanel
             {
-                Location = new Point(26, 18),
+                Dock = DockStyle.Top,
                 AutoSize = true,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
+                ColumnCount = 1,
+                RowCount = 3,
                 Tag = "AnaBolum"
             };
+            anaIzgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            anaIzgara.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            anaIzgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 166F));
+            anaIzgara.RowStyles.Add(new RowStyle(SizeType.AutoSize));
 
-            // Üst Başlık
+            // 1) ÜST BAŞLIK
             var lblBaslik = new Label
             {
                 Text = "Profil, Rozetler && Görünüm",
-                Font = new Font("Segoe UI", 16f, FontStyle.Bold),
+                Font = FontOnbellegi.Al("Segoe UI", 18f, FontStyle.Bold),
                 AutoSize = true,
-                Margin = new Padding(0, 0, 0, 12)
+                Margin = new Padding(0, 0, 0, 14)
             };
-            anaAkis.Controls.Add(lblBaslik);
 
-            // 1. ÜST PROFİL KARTI
-            _pnlProfilOnizleme.Size = new Size(940, 146);
-            _pnlProfilOnizleme.Margin = new Padding(0, 0, 0, 18);
-            _pnlProfilOnizleme.Tag = "OnizlemeKarti";
+            // 2) HERO PROFİL KARTI (tam genişlikte responsive)
+            _pnlProfilOnizleme = new BufferedPanel
+            {
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 0, 16),
+                Padding = new Padding(20, 16, 20, 14),
+                Tag = "OnizlemeKarti"
+            };
             _pnlProfilOnizleme.Paint += (_, e) =>
             {
-                var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+                TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
                 _pnlProfilOnizleme.BackColor = tema.Kart;
                 Color kenar = _aktifTercih.CerceveGoster ? tema.Vurgu : Color.FromArgb(65, tema.Yazi);
                 KisisellestirmeServisi.DuzKartCiz(e.Graphics, _pnlProfilOnizleme.ClientRectangle, kenar, _aktifTercih.CerceveGoster ? 2f : 1f);
             };
 
-            _lblAvatar.Size = new Size(64, 64);
-            _lblAvatar.Location = new Point(20, 18);
-            _lblAvatar.Font = new Font("Segoe UI Emoji", 28f);
-            _lblAvatar.TextAlign = ContentAlignment.MiddleCenter;
-            _lblAvatar.BackColor = Color.Transparent;
-            _lblAvatar.Cursor = Cursors.Hand;
+            _lblAvatar = new Label
+            {
+                Size = new Size(64, 64),
+                Location = new Point(20, 16),
+                Font = FontOnbellegi.Al("Segoe UI Emoji", 28f),
+                TextAlign = ContentAlignment.MiddleCenter,
+                BackColor = Color.Transparent,
+                Cursor = Cursors.Hand
+            };
             _lblAvatar.Click += (_, _) => ProfilDuzenlePenceresiAc();
 
-            _lblOgrenciAdi.Location = new Point(94, 18);
-            _lblOgrenciAdi.Font = new Font("Segoe UI", 14f, FontStyle.Bold);
-            _lblOgrenciAdi.AutoSize = true;
-            _lblOgrenciAdi.BackColor = Color.Transparent;
+            _lblOgrenciAdi = new Label
+            {
+                Location = new Point(96, 16),
+                Font = FontOnbellegi.Al("Segoe UI", 14f, FontStyle.Bold),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
 
-            _lblUnvanVeHedef.Location = new Point(96, 46);
-            _lblUnvanVeHedef.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            _lblUnvanVeHedef.AutoSize = true;
-            _lblUnvanVeHedef.BackColor = Color.Transparent;
-            _lblUnvanVeHedef.Tag = "SabitRenk";
+            _lblUnvanVeHedef = new Label
+            {
+                Location = new Point(98, 44),
+                Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                BackColor = Color.Transparent,
+                Tag = "SabitRenk"
+            };
 
-            _lblSeriVeJeton.Location = new Point(96, 69);
-            _lblSeriVeJeton.Font = new Font("Segoe UI", 9f);
-            _lblSeriVeJeton.AutoSize = true;
-            _lblSeriVeJeton.BackColor = Color.Transparent;
+            _lblSeriVeJeton = new Label
+            {
+                Location = new Point(98, 67),
+                Font = FontOnbellegi.Al("Segoe UI", 9f),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
 
-            _lblSeviyeBaslik.Location = new Point(22, 96);
-            _lblSeviyeBaslik.Font = new Font("Segoe UI", 9.5f, FontStyle.Bold);
-            _lblSeviyeBaslik.AutoSize = true;
-            _lblSeviyeBaslik.BackColor = Color.Transparent;
-
-            _lblXpDetay.Location = new Point(620, 96);
-            _lblXpDetay.Size = new Size(298, 20);
-            _lblXpDetay.Font = new Font("Segoe UI", 8.5f);
-            _lblXpDetay.TextAlign = ContentAlignment.MiddleRight;
-            _lblXpDetay.BackColor = Color.Transparent;
-
-            _pnlXpBarArka.Location = new Point(22, 120);
-            _pnlXpBarArka.Size = new Size(896, 10);
-            _pnlXpBarArka.BackColor = Color.FromArgb(60, 65, 75);
-            _pnlXpBarArka.Tag = "SabitRenk";
-
-            _pnlXpBarDolu.Location = new Point(0, 0);
-            _pnlXpBarDolu.Size = new Size(120, 10);
-            _pnlXpBarDolu.Tag = "SabitRenk";
-            _pnlXpBarArka.Controls.Add(_pnlXpBarDolu);
-
-            _btnProfilDuzenle.Text = "✎ Profili Düzenle";
-            _btnProfilDuzenle.SetBounds(668, 18, 132, 32);
-            _btnProfilDuzenle.FlatStyle = FlatStyle.Flat;
-            _btnProfilDuzenle.Cursor = Cursors.Hand;
-            _btnProfilDuzenle.Click += (_, _) => ProfilDuzenlePenceresiAc();
-
-            _btnPngIndir.Text = "📸 PNG İndir";
-            _btnPngIndir.SetBounds(808, 18, 110, 32);
-            _btnPngIndir.FlatStyle = FlatStyle.Flat;
-            _btnPngIndir.Cursor = Cursors.Hand;
-            _btnPngIndir.Tag = "VurguButon";
+            _btnPngIndir = new Button
+            {
+                Text = "📸 PNG İndir",
+                Size = new Size(116, 34),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Tag = "VurguButon"
+            };
             _btnPngIndir.Click += (_, _) => ProfilKartiniPngKaydet();
 
-            _pnlProfilOnizleme.Controls.Clear();
+            _btnProfilDuzenle = new Button
+            {
+                Text = "✎ Profili Düzenle",
+                Size = new Size(140, 34),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand
+            };
+            _btnProfilDuzenle.Click += (_, _) => ProfilDuzenlePenceresiAc();
+
+            _lblSeviyeBaslik = new Label
+            {
+                Location = new Point(22, 98),
+                Font = FontOnbellegi.Al("Segoe UI", 9.5f, FontStyle.Bold),
+                AutoSize = true,
+                BackColor = Color.Transparent
+            };
+
+            _lblXpDetay = new Label
+            {
+                Size = new Size(340, 20),
+                Anchor = AnchorStyles.Top | AnchorStyles.Right,
+                Font = FontOnbellegi.Al("Segoe UI", 8.5f),
+                TextAlign = ContentAlignment.MiddleRight,
+                BackColor = Color.Transparent
+            };
+
+            _pnlXpBarArka = new Panel
+            {
+                Location = new Point(22, 122),
+                Height = 10,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                BackColor = Color.FromArgb(60, 65, 75),
+                Tag = "SabitRenk"
+            };
+
+            _pnlXpBarDolu = new Panel
+            {
+                Location = new Point(0, 0),
+                Size = new Size(120, 10),
+                Tag = "SabitRenk"
+            };
+            _pnlXpBarArka.Controls.Add(_pnlXpBarDolu);
+
+            _pnlProfilOnizleme.Resize += (_, _) => HeroYerlesiminiHizala();
             _pnlProfilOnizleme.Controls.AddRange(new Control[]
             {
                 _lblAvatar, _lblOgrenciAdi, _lblUnvanVeHedef, _lblSeriVeJeton,
                 _lblSeviyeBaslik, _lblXpDetay, _pnlXpBarArka,
                 _btnProfilDuzenle, _btnPngIndir
             });
-            anaAkis.Controls.Add(_pnlProfilOnizleme);
 
-            // 2. İKİ KOLONLU ANA DASHBOARD ALANI
+            // 3) İKİ KOLONLU RESPONSIVE DASHBOARD (%60 SOL / %40 SAĞ)
             var ikiKolon = new TableLayoutPanel
             {
+                Dock = DockStyle.Top,
+                AutoSize = true,
                 ColumnCount = 2,
                 RowCount = 1,
-                Size = new Size(940, 820),
                 Margin = new Padding(0),
                 Tag = "AnaBolum"
             };
-            ikiKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 575f));
-            ikiKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 365f));
+            ikiKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 60F));
+            ikiKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 40F));
 
-            var solKolon = new FlowLayoutPanel
+            // SOL KOLON
+            var solKolon = new TableLayoutPanel
             {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Padding = new Padding(0, 0, 15, 0),
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 1,
+                RowCount = 6,
+                Padding = new Padding(0, 0, 16, 0),
+                Tag = "AnaBolum"
+            };
+            solKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            _tblDersIstatistikleri = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 82,
+                ColumnCount = 3,
+                RowCount = 1,
+                Margin = new Padding(0, 0, 0, 14),
+                Tag = "AnaBolum"
+            };
+            _tblDersIstatistikleri.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            _tblDersIstatistikleri.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.33F));
+            _tblDersIstatistikleri.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 33.34F));
+
+            _flpRozetVitrini = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                MinimumSize = new Size(0, 240),
+                Margin = new Padding(0, 0, 0, 14),
                 Tag = "AnaBolum"
             };
 
-            var sagKolon = new FlowLayoutPanel
+            var pnlAyarKarti = new BufferedPanel
             {
-                Dock = DockStyle.Fill,
-                FlowDirection = FlowDirection.TopDown,
-                WrapContents = false,
-                Padding = new Padding(5, 0, 0, 0),
+                Dock = DockStyle.Top,
+                Height = 344,
+                Padding = new Padding(14),
+                Margin = new Padding(0, 0, 0, 12)
+            };
+
+            _flpTemaButonlari = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                Height = 132,
+                AutoScroll = true,
                 Tag = "AnaBolum"
             };
 
-            // --- SOL KOLON 1: Başarı İstatistikleri (3 Ders Tek Satırda Tam Hizalı) ---
-            solKolon.Controls.Add(BolumBasligiOlustur("Başarı İstatistikleri"));
-            _flpDersIstatistikleri.Size = new Size(560, 76);
-            _flpDersIstatistikleri.WrapContents = false;
-            _flpDersIstatistikleri.Margin = new Padding(0, 0, 0, 14);
-            _flpDersIstatistikleri.Tag = "AnaBolum";
-            solKolon.Controls.Add(_flpDersIstatistikleri);
-
-            // --- SOL KOLON 2: Rozet Koleksiyonum & Ünvan Vitrini ---
-            solKolon.Controls.Add(BolumBasligiOlustur("Rozet Koleksiyonum (Ünvan takmak için tıklayın)"));
-            _flpRozetVitrini.Size = new Size(565, 250);
-            _flpRozetVitrini.Margin = new Padding(0, 0, 0, 14);
-            _flpRozetVitrini.Tag = "AnaBolum";
-            solKolon.Controls.Add(_flpRozetVitrini);
-
-            // --- SOL KOLON 3: Görünüm & 50 Renk Teması ---
-            solKolon.Controls.Add(BolumBasligiOlustur("Görünüm && Renk Temaları (50 Seçenek)"));
-            var pnlAyarKarti = new Panel
+            var pnlAltAyarlar = new Panel
             {
-                Size = new Size(558, 340),
-                Padding = new Padding(14)
+                Dock = DockStyle.Fill,
+                Padding = new Padding(0, 8, 0, 0),
+                Tag = "AnaBolum"
             };
 
-            _flpTemaButonlari.Location = new Point(14, 14);
-            _flpTemaButonlari.Size = new Size(530, 126);
-            _flpTemaButonlari.AutoScroll = true;
-            _flpTemaButonlari.Tag = "AnaBolum";
-
-            var lblVurgu = new Label { Text = "Vurgu:", Font = new Font("Segoe UI", 9f, FontStyle.Bold), Location = new Point(14, 154), AutoSize = true };
-            var flpVurgu = new FlowLayoutPanel { Location = new Point(72, 149), Size = new Size(470, 32), Tag = "AnaBolum" };
+            var lblVurgu = new Label { Text = "Vurgu:", Font = FontOnbellegi.Al("Segoe UI", 9f, FontStyle.Bold), Location = new Point(2, 14), AutoSize = true };
+            var flpVurgu = new FlowLayoutPanel { Location = new Point(62, 10), Size = new Size(460, 32), Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right, Tag = "AnaBolum" };
             Color[] vurguRenkleri =
             {
                 Color.FromArgb(0, 122, 204), Color.FromArgb(16, 185, 129), Color.FromArgb(56, 189, 248),
                 Color.FromArgb(168, 85, 247), Color.FromArgb(245, 158, 11), Color.FromArgb(244, 63, 94),
                 Color.FromArgb(236, 72, 153), Color.FromArgb(100, 116, 139)
             };
-            foreach (var r in vurguRenkleri)
+            foreach (Color r in vurguRenkleri)
             {
-                var btnR = new Button { Size = new Size(25, 25), BackColor = r, FlatStyle = FlatStyle.Flat, Margin = new Padding(0, 0, 7, 0), Cursor = Cursors.Hand, Tag = "SabitRenk" };
+                Color secilen = r;
+                var btnR = new Button { Size = new Size(25, 25), BackColor = secilen, FlatStyle = FlatStyle.Flat, Margin = new Padding(0, 0, 7, 0), Cursor = Cursors.Hand, Tag = "SabitRenk" };
                 btnR.FlatAppearance.BorderColor = Color.FromArgb(180, 180, 180);
-                btnR.Click += (_, _) => { _aktifTercih.VurguHex = KisisellestirmeServisi.ColorToHex(r); CanliUygula(); };
+                btnR.Click += (_, _) => { _aktifTercih.VurguHex = KisisellestirmeServisi.ColorToHex(secilen); CanliUygula(); };
                 flpVurgu.Controls.Add(btnR);
             }
 
-            var lblFont = new Label { Text = "Font:", Font = new Font("Segoe UI", 9f, FontStyle.Bold), Location = new Point(14, 194), AutoSize = true };
-            _cmbYaziTipi.DropDownStyle = ComboBoxStyle.DropDownList;
-            _cmbYaziTipi.SetBounds(72, 190, 165, 28);
-            _cmbYaziTipi.Items.Clear();
-            foreach (var f in Kisisellestirme.YaziTipleri) _cmbYaziTipi.Items.Add(f);
+            var lblFont = new Label { Text = "Font:", Font = FontOnbellegi.Al("Segoe UI", 9f, FontStyle.Bold), Location = new Point(2, 54), AutoSize = true };
+            _cmbYaziTipi = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+            _cmbYaziTipi.SetBounds(62, 50, 165, 28);
+            foreach (string f in Kisisellestirme.YaziTipleri) _cmbYaziTipi.Items.Add(f);
             _cmbYaziTipi.SelectedIndex = Math.Max(0, Kisisellestirme.YaziTipleri.IndexOf(_aktifTercih.YaziTipi));
             _cmbYaziTipi.SelectedIndexChanged += (_, _) =>
             {
@@ -411,10 +440,9 @@ namespace KademeliEgitimPlatformu
                 CanliUygula();
             };
 
-            var lblBoyut = new Label { Text = "Boyut:", Font = new Font("Segoe UI", 9f, FontStyle.Bold), Location = new Point(252, 194), AutoSize = true };
-            _cmbYaziBoyutu.DropDownStyle = ComboBoxStyle.DropDownList;
-            _cmbYaziBoyutu.SetBounds(305, 190, 115, 28);
-            _cmbYaziBoyutu.Items.Clear();
+            var lblBoyut = new Label { Text = "Boyut:", Font = FontOnbellegi.Al("Segoe UI", 9f, FontStyle.Bold), Location = new Point(242, 54), AutoSize = true };
+            _cmbYaziBoyutu = new ComboBox { DropDownStyle = ComboBoxStyle.DropDownList };
+            _cmbYaziBoyutu.SetBounds(295, 50, 115, 28);
             _cmbYaziBoyutu.Items.AddRange(new object[] { "Küçük", "Normal", "Büyük" });
             _cmbYaziBoyutu.SelectedItem = _aktifTercih.YaziBoyutuModu;
             if (_cmbYaziBoyutu.SelectedIndex < 0) _cmbYaziBoyutu.SelectedIndex = 1;
@@ -424,20 +452,23 @@ namespace KademeliEgitimPlatformu
                 CanliUygula();
             };
 
-            _chkCerceve.Text = "Profil kartında vurgu çerçevesi göster";
-            _chkCerceve.Checked = _aktifTercih.CerceveGoster;
-            _chkCerceve.AutoSize = true;
-            _chkCerceve.Location = new Point(14, 232);
+            _chkCerceve = new CheckBox
+            {
+                Text = "Profil kartında vurgu çerçevesi göster",
+                Checked = _aktifTercih.CerceveGoster,
+                AutoSize = true,
+                Location = new Point(2, 92)
+            };
             _chkCerceve.CheckedChanged += (_, _) => { _aktifTercih.CerceveGoster = _chkCerceve.Checked; _pnlProfilOnizleme.Invalidate(); };
 
-            var btnKaydet = new Button { Text = "💾 Kaydet", Location = new Point(14, 274), Size = new Size(135, 34), FlatStyle = FlatStyle.Flat, Tag = "VurguButon", Cursor = Cursors.Hand };
+            var btnKaydet = new Button { Text = "💾 Kaydet", Location = new Point(2, 134), Size = new Size(135, 34), FlatStyle = FlatStyle.Flat, Tag = "VurguButon", Cursor = Cursors.Hand };
             btnKaydet.Click += (_, _) =>
             {
                 Kisisellestirme.TercihiKaydet(_aktifTercih);
                 BasariBildirimiGoster("💾 Tüm profil ve görünüm tercihleri kaydedildi!");
             };
 
-            var btnSifirla = new Button { Text = "↺ Sıfırla", Location = new Point(158, 274), Size = new Size(115, 34), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
+            var btnSifirla = new Button { Text = "↺ Sıfırla", Location = new Point(146, 134), Size = new Size(115, 34), FlatStyle = FlatStyle.Flat, Cursor = Cursors.Hand };
             btnSifirla.Click += (_, _) =>
             {
                 _aktifTercih.TemaAdi = "Koyu Klasik";
@@ -452,12 +483,15 @@ namespace KademeliEgitimPlatformu
                 CanliUygula();
             };
 
-            _btnOzelTemaSil.Text = "🗑️ Temayı Sil";
-            _btnOzelTemaSil.Location = new Point(282, 274);
-            _btnOzelTemaSil.Size = new Size(125, 34);
-            _btnOzelTemaSil.FlatStyle = FlatStyle.Flat;
-            _btnOzelTemaSil.Cursor = Cursors.Hand;
-            _btnOzelTemaSil.Visible = false;
+            _btnOzelTemaSil = new Button
+            {
+                Text = "🗑️ Temayı Sil",
+                Location = new Point(270, 134),
+                Size = new Size(125, 34),
+                FlatStyle = FlatStyle.Flat,
+                Cursor = Cursors.Hand,
+                Visible = false
+            };
             _btnOzelTemaSil.Click += (_, _) =>
             {
                 _aktifTercih.OzelPaletler.RemoveAll(p => p.Ad.Equals(_aktifTercih.TemaAdi, StringComparison.OrdinalIgnoreCase));
@@ -467,59 +501,93 @@ namespace KademeliEgitimPlatformu
                 CanliUygula();
             };
 
-            pnlAyarKarti.Controls.AddRange(new Control[]
+            pnlAltAyarlar.Controls.AddRange(new Control[]
             {
-                _flpTemaButonlari, lblVurgu, flpVurgu, lblFont, _cmbYaziTipi,
+                lblVurgu, flpVurgu, lblFont, _cmbYaziTipi,
                 lblBoyut, _cmbYaziBoyutu, _chkCerceve, btnKaydet, btnSifirla, _btnOzelTemaSil
             });
-            solKolon.Controls.Add(pnlAyarKarti);
 
-            // --- SAĞ KOLON 1: Gelişimim ---
-            sagKolon.Controls.Add(BolumBasligiOlustur("Gelişimim"));
-            _pnlGelisimKart.Size = new Size(355, 168);
-            _pnlGelisimKart.Margin = new Padding(0, 0, 0, 14);
-            sagKolon.Controls.Add(_pnlGelisimKart);
+            pnlAyarKarti.Controls.Add(pnlAltAyarlar);
+            pnlAyarKarti.Controls.Add(_flpTemaButonlari);
 
-            // --- SAĞ KOLON 2: Bugünün Görevleri ---
-            sagKolon.Controls.Add(BolumBasligiOlustur("🎯 Bugünün Görevleri"));
-            _pnlGorevlerKart.Size = new Size(355, 148);
-            _pnlGorevlerKart.Margin = new Padding(0, 0, 0, 14);
-            sagKolon.Controls.Add(_pnlGorevlerKart);
+            solKolon.Controls.Add(BolumBasligiOlustur("Başarı İstatistikleri"), 0, 0);
+            solKolon.Controls.Add(_tblDersIstatistikleri, 0, 1);
+            solKolon.Controls.Add(BolumBasligiOlustur("Rozet Koleksiyonum (Ünvan takmak için tıklayın)"), 0, 2);
+            solKolon.Controls.Add(_flpRozetVitrini, 0, 3);
+            solKolon.Controls.Add(BolumBasligiOlustur("Görünüm && Renk Temaları (50 Seçenek)"), 0, 4);
+            solKolon.Controls.Add(pnlAyarKarti, 0, 5);
 
-            // --- SAĞ KOLON 3: Haftalık Çalışma Performansı ---
-            sagKolon.Controls.Add(BolumBasligiOlustur("📊 Haftalık Performans (Pzt - Paz)"));
-            _pnlHaftalikGrafik.Size = new Size(355, 145);
-            _pnlHaftalikGrafik.Margin = new Padding(0, 0, 0, 14);
+            // SAĞ KOLON
+            var sagKolon = new TableLayoutPanel
+            {
+                Dock = DockStyle.Top,
+                AutoSize = true,
+                ColumnCount = 1,
+                RowCount = 8,
+                Padding = new Padding(8, 0, 0, 0),
+                Tag = "AnaBolum"
+            };
+            sagKolon.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+
+            _pnlGelisimKart = new BufferedPanel { Dock = DockStyle.Top, Height = 168, Margin = new Padding(0, 0, 0, 14), Padding = new Padding(10) };
+            _pnlGorevlerKart = new BufferedPanel { Dock = DockStyle.Top, Height = 152, Margin = new Padding(0, 0, 0, 14), Padding = new Padding(12) };
+            _pnlHaftalikGrafik = new BufferedPanel { Dock = DockStyle.Top, Height = 150, Margin = new Padding(0, 0, 0, 14) };
             _pnlHaftalikGrafik.Paint += (_, e) => HaftalikGrafikCiz(e.Graphics, _pnlHaftalikGrafik.ClientRectangle);
-            sagKolon.Controls.Add(_pnlHaftalikGrafik);
+            _pnlAktivitelerKart = new BufferedPanel { Dock = DockStyle.Top, Height = 172, Padding = new Padding(12) };
 
-            // --- SAĞ KOLON 4: Son Aktiviteler ---
-            sagKolon.Controls.Add(BolumBasligiOlustur("🕒 Son Aktiviteler"));
-            _pnlAktivitelerKart.Size = new Size(355, 168);
-            sagKolon.Controls.Add(_pnlAktivitelerKart);
+            sagKolon.Controls.Add(BolumBasligiOlustur("Gelişimim"), 0, 0);
+            sagKolon.Controls.Add(_pnlGelisimKart, 0, 1);
+            sagKolon.Controls.Add(BolumBasligiOlustur("🎯 Bugünün Görevleri"), 0, 2);
+            sagKolon.Controls.Add(_pnlGorevlerKart, 0, 3);
+            sagKolon.Controls.Add(BolumBasligiOlustur("📊 Haftalık Performans (Pzt - Paz)"), 0, 4);
+            sagKolon.Controls.Add(_pnlHaftalikGrafik, 0, 5);
+            sagKolon.Controls.Add(BolumBasligiOlustur("🕒 Son Aktiviteler"), 0, 6);
+            sagKolon.Controls.Add(_pnlAktivitelerKart, 0, 7);
 
             ikiKolon.Controls.Add(solKolon, 0, 0);
             ikiKolon.Controls.Add(sagKolon, 1, 0);
-            anaAkis.Controls.Add(ikiKolon);
 
-            _pnlKisisellestirme.Controls.Add(anaAkis);
+            anaIzgara.Controls.Add(lblBaslik, 0, 0);
+            anaIzgara.Controls.Add(_pnlProfilOnizleme, 0, 1);
+            anaIzgara.Controls.Add(ikiKolon, 0, 2);
+
+            _pnlKisisellestirme.Controls.Add(anaIzgara);
+            _pnlKisisellestirme.ResumeLayout(true);
+
+            HeroYerlesiminiHizala();
             TumProfilVerileriniYenile();
+            _kisisellestirmeOlaylariBagli = true;
+        }
+
+        private void HeroYerlesiminiHizala()
+        {
+            int genislik = Math.Max(520, _pnlProfilOnizleme.ClientSize.Width);
+            _btnPngIndir.Location = new Point(genislik - _btnPngIndir.Width - 20, 16);
+            _btnProfilDuzenle.Location = new Point(_btnPngIndir.Left - _btnProfilDuzenle.Width - 10, 16);
+            _lblXpDetay.Location = new Point(genislik - _lblXpDetay.Width - 22, 98);
+
+            int barGenislik = Math.Max(200, genislik - 44);
+            _pnlXpBarArka.Width = barGenislik;
+            _pnlXpBarDolu.Width = Math.Clamp((int)(barGenislik * _sonXpDolulukOrani), 8, barGenislik);
         }
 
         private static Label BolumBasligiOlustur(string metin) => new()
         {
             Text = metin,
-            Font = new Font("Segoe UI", 11.5f, FontStyle.Bold),
+            Font = FontOnbellegi.Al("Segoe UI", 11.5f, FontStyle.Bold),
             AutoSize = true,
             Margin = new Padding(0, 0, 0, 6)
         };
 
         private void TumProfilVerileriniYenile()
         {
-            var rozetler = Kisisellestirme.RozetleriHesapla(
+            if (!_kisisellestirmeOlaylariBagli && _pnlProfilOnizleme.Controls.Count == 0)
+                return;
+
+            List<RozetBilgisi> rozetler = Kisisellestirme.RozetleriHesapla(
                 _aktifTercih, _gorselBasari, _veriTabaniBasari, _siberBasari, _ortaModGecti, _simulatorOduluAlindi);
 
-            foreach (var r in rozetler.Where(x => x.KazanildiMi))
+            foreach (RozetBilgisi r in rozetler.Where(x => x.KazanildiMi))
             {
                 string anahtar = $"{r.Kod}_{r.Kademe}";
                 if (_aktifTercih.BildirilenRozetler.Add(anahtar))
@@ -541,23 +609,23 @@ namespace KademeliEgitimPlatformu
 
         private void HeroKartiniGuncelle(List<RozetBilgisi> rozetler)
         {
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
             var xpBilgi = Kisisellestirme.XpVeSeviyeHesapla(
                 _aktifTercih, _gorselBasari, _veriTabaniBasari, _siberBasari, _ortaModGecti, _simulatorOduluAlindi);
 
-            var kazanilmislar = rozetler.Where(r => r.KazanildiMi).ToList();
+            List<RozetBilgisi> kazanilmislar = rozetler.Where(r => r.KazanildiMi).ToList();
             string aktifUnvan = "Yeni Başlayan";
             Color unvanRengi = tema.Vurgu;
 
             if (!string.IsNullOrWhiteSpace(_aktifTercih.SeciliUnvan) && kazanilmislar.Any(r => r.Unvan == _aktifTercih.SeciliUnvan))
             {
-                var seciliRozet = kazanilmislar.First(r => r.Unvan == _aktifTercih.SeciliUnvan);
+                RozetBilgisi seciliRozet = kazanilmislar.First(r => r.Unvan == _aktifTercih.SeciliUnvan);
                 aktifUnvan = $"{seciliRozet.Ikon} {seciliRozet.Unvan}";
                 unvanRengi = seciliRozet.KademeRengi;
             }
             else if (kazanilmislar.Count > 0)
             {
-                var enYuksek = kazanilmislar.OrderByDescending(r => r.Kademe).First();
+                RozetBilgisi enYuksek = kazanilmislar.OrderByDescending(r => r.Kademe).First();
                 aktifUnvan = $"{enYuksek.Ikon} {enYuksek.Unvan}";
                 unvanRengi = enYuksek.KademeRengi;
             }
@@ -573,64 +641,76 @@ namespace KademeliEgitimPlatformu
             int kalanXp = xpBilgi.SonrakiSeviyeGereken - xpBilgi.MevcutSeviyeXp;
             _lblXpDetay.Text = $"{xpBilgi.MevcutSeviyeXp} / {xpBilgi.SonrakiSeviyeGereken} XP  ({kalanXp} XP sonra: {xpBilgi.SonrakiSeviyeUnvani})";
 
-            int doluluk = Math.Clamp(xpBilgi.MevcutSeviyeXp * 896 / xpBilgi.SonrakiSeviyeGereken, 8, 896);
-            _pnlXpBarDolu.Size = new Size(doluluk, 10);
+            _sonXpDolulukOrani = (double)xpBilgi.MevcutSeviyeXp / Math.Max(1, xpBilgi.SonrakiSeviyeGereken);
             _pnlXpBarDolu.BackColor = tema.Vurgu;
-
+            HeroYerlesiminiHizala();
             _pnlProfilOnizleme.Invalidate();
         }
 
         private void DersIstatistikleriniGuncelle()
         {
-            _flpDersIstatistikleri.Controls.Clear();
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _tblDersIstatistikleri.SuspendLayout();
+            PanelTemizle(_tblDersIstatistikleri);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
             (string Ad, int Yuzde, Color Renk)[] dersler =
             {
                 ("Görsel Prog.", _gorselBasari, Color.FromArgb(0, 175, 160)),
-                ("Veri Tabanı", _veriTabaniBasari, Color.FromArgb(245, 165, 25)),
+                ("Veri Tabanları", _veriTabaniBasari, Color.FromArgb(245, 165, 25)),
                 ("Siber Güvenlik", _siberBasari, Color.FromArgb(215, 70, 165))
             };
 
             for (int i = 0; i < dersler.Length; i++)
             {
                 var d = dersler[i];
-                int sagBosluk = (i < dersler.Length - 1) ? 9 : 0;
-
-                var kart = new Panel
+                var kart = new BufferedPanel
                 {
-                    Size = new Size(179, 72),
+                    Dock = DockStyle.Fill,
                     BackColor = tema.Kart,
-                    Margin = new Padding(0, 0, sagBosluk, 0),
+                    Margin = new Padding(0, 0, i < dersler.Length - 1 ? 10 : 0, 0),
+                    Padding = new Padding(12, 8, 12, 10),
                     Tag = "SabitRenk"
                 };
                 kart.Paint += (_, e) => KisisellestirmeServisi.DuzKartCiz(e.Graphics, kart.ClientRectangle, Color.FromArgb(65, tema.Yazi), 1f);
 
-                var lblYuzde = new Label { Text = $"%{d.Yuzde}", Font = new Font("Segoe UI", 14f, FontStyle.Bold), ForeColor = d.Renk, Location = new Point(12, 8), AutoSize = true, Tag = "SabitRenk" };
-                var lblAd = new Label { Text = d.Ad, Font = new Font("Segoe UI", 8.5f), ForeColor = tema.Yazi, Location = new Point(12, 36), AutoSize = true, Tag = "SabitRenk" };
+                var lblYuzde = new Label { Text = $"%{d.Yuzde}", Font = FontOnbellegi.Al("Segoe UI", 14f, FontStyle.Bold), ForeColor = d.Renk, Dock = DockStyle.Top, Height = 28, Tag = "SabitRenk" };
+                var lblAd = new Label { Text = d.Ad, Font = FontOnbellegi.Al("Segoe UI", 8.5f), ForeColor = tema.Yazi, Dock = DockStyle.Top, Height = 20, Tag = "SabitRenk" };
 
-                var barArka = new Panel { Location = new Point(12, 58), Size = new Size(155, 5), BackColor = Color.FromArgb(55, tema.Yazi), Tag = "SabitRenk" };
-                var barDolu = new Panel { Location = new Point(0, 0), Size = new Size(Math.Clamp(d.Yuzde, 0, 100) * 155 / 100, 5), BackColor = d.Renk, Tag = "SabitRenk" };
-                barArka.Controls.Add(barDolu);
+                int yuzdeDeger = Math.Clamp(d.Yuzde, 0, 100);
+                var barArka = new Panel { Dock = DockStyle.Bottom, Height = 6, BackColor = Color.FromArgb(55, tema.Yazi), Tag = "SabitRenk" };
+                barArka.Paint += (_, e) =>
+                {
+                    int w = barArka.Width * yuzdeDeger / 100;
+                    if (w > 0)
+                    {
+                        using var firca = new SolidBrush(d.Renk);
+                        e.Graphics.FillRectangle(firca, 0, 0, w, barArka.Height);
+                    }
+                };
 
-                kart.Controls.AddRange(new Control[] { lblYuzde, lblAd, barArka });
-                _flpDersIstatistikleri.Controls.Add(kart);
+                kart.Controls.Add(barArka);
+                kart.Controls.Add(lblAd);
+                kart.Controls.Add(lblYuzde);
+                _tblDersIstatistikleri.Controls.Add(kart, i, 0);
             }
+
+            _tblDersIstatistikleri.ResumeLayout(true);
         }
 
         private void RozetVitrininiGuncelle(List<RozetBilgisi> rozetler)
         {
-            _flpRozetVitrini.Controls.Clear();
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _flpRozetVitrini.SuspendLayout();
+            PanelTemizle(_flpRozetVitrini);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
-            foreach (var rozet in rozetler)
+            foreach (RozetBilgisi rozet in rozetler)
             {
                 bool takiliMi = rozet.KazanildiMi && _aktifTercih.SeciliUnvan == rozet.Unvan;
-                var kart = new Panel
+                var kart = new BufferedPanel
                 {
-                    Size = new Size(132, 118),
+                    Size = new Size(142, 118),
                     BackColor = tema.Kart,
-                    Margin = new Padding(0, 0, 9, 8),
+                    Margin = new Padding(0, 0, 10, 10),
                     Cursor = Cursors.Hand,
                     Tag = "SabitRenk"
                 };
@@ -644,7 +724,7 @@ namespace KademeliEgitimPlatformu
                 var lblIkon = new Label
                 {
                     Text = rozet.KazanildiMi ? rozet.KategoriIkon : "🔒",
-                    Font = new Font("Segoe UI Emoji", 18f),
+                    Font = FontOnbellegi.Al("Segoe UI Emoji", 18f),
                     Location = new Point(8, 8),
                     Size = new Size(42, 34),
                     ForeColor = rozet.KazanildiMi ? tema.Yazi : Color.FromArgb(130, tema.Yazi),
@@ -654,9 +734,9 @@ namespace KademeliEgitimPlatformu
                 var lblKademe = new Label
                 {
                     Text = takiliMi ? "★ TAKILI" : rozet.KademeAdi,
-                    Font = new Font("Segoe UI", 7.5f, FontStyle.Bold),
+                    Font = FontOnbellegi.Al("Segoe UI", 7.5f, FontStyle.Bold),
                     ForeColor = takiliMi ? tema.Vurgu : rozet.KademeRengi,
-                    Location = new Point(52, 16),
+                    Location = new Point(54, 16),
                     AutoSize = true,
                     Tag = "SabitRenk"
                 };
@@ -664,7 +744,7 @@ namespace KademeliEgitimPlatformu
                 var lblSeri = new Label
                 {
                     Text = rozet.SeriAdi,
-                    Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+                    Font = FontOnbellegi.Al("Segoe UI", 9f, FontStyle.Bold),
                     ForeColor = rozet.KazanildiMi ? tema.Yazi : Color.FromArgb(150, tema.Yazi),
                     Location = new Point(10, 46),
                     AutoSize = true,
@@ -674,15 +754,16 @@ namespace KademeliEgitimPlatformu
                 var lblUnvan = new Label
                 {
                     Text = rozet.Unvan,
-                    Font = new Font("Segoe UI", 8f),
+                    Font = FontOnbellegi.Al("Segoe UI", 8f),
                     ForeColor = rozet.KazanildiMi ? rozet.KademeRengi : Color.FromArgb(125, tema.Yazi),
                     Location = new Point(10, 67),
-                    Size = new Size(114, 18),
+                    Size = new Size(122, 18),
+                    AutoEllipsis = true,
                     Tag = "SabitRenk"
                 };
 
-                var barArka = new Panel { Location = new Point(10, 92), Size = new Size(112, 4), BackColor = Color.FromArgb(55, tema.Yazi), Tag = "SabitRenk" };
-                var barDolu = new Panel { Location = new Point(0, 0), Size = new Size(Math.Clamp(rozet.IlerlemeYuzdesi, 0, 100) * 112 / 100, 4), BackColor = rozet.KazanildiMi ? rozet.KademeRengi : tema.Vurgu, Tag = "SabitRenk" };
+                var barArka = new Panel { Location = new Point(10, 94), Size = new Size(122, 4), BackColor = Color.FromArgb(55, tema.Yazi), Tag = "SabitRenk" };
+                var barDolu = new Panel { Location = new Point(0, 0), Size = new Size(Math.Clamp(rozet.IlerlemeYuzdesi, 0, 100) * 122 / 100, 4), BackColor = rozet.KazanildiMi ? rozet.KademeRengi : tema.Vurgu, Tag = "SabitRenk" };
                 barArka.Controls.Add(barDolu);
 
                 void RozetTiklandi(object? s, EventArgs e)
@@ -706,18 +787,22 @@ namespace KademeliEgitimPlatformu
 
                 kart.Click += RozetTiklandi;
                 lblIkon.Click += RozetTiklandi;
+                lblKademe.Click += RozetTiklandi;
                 lblSeri.Click += RozetTiklandi;
                 lblUnvan.Click += RozetTiklandi;
 
                 kart.Controls.AddRange(new Control[] { lblIkon, lblKademe, lblSeri, lblUnvan, barArka });
                 _flpRozetVitrini.Controls.Add(kart);
             }
+
+            _flpRozetVitrini.ResumeLayout(true);
         }
 
         private void GelisimKartiniGuncelle()
         {
-            _pnlGelisimKart.Controls.Clear();
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _pnlGelisimKart.SuspendLayout();
+            PanelTemizle(_pnlGelisimKart);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
             int gercekSoru = Math.Max(_aktifTercih.ToplamCozulenSoru, (_gorselBasari + _veriTabaniBasari + _siberBasari) / 5);
             string sureMetni = _aktifTercih.ToplamCalismaDakikasi >= 60
@@ -729,7 +814,7 @@ namespace KademeliEgitimPlatformu
             if (maxPuan > 0)
             {
                 if (_gorselBasari == maxPuan) enGuclu = $"Görsel Prog. (%{maxPuan})";
-                else if (_veriTabaniBasari == maxPuan) enGuclu = $"Veri Tabanı (%{maxPuan})";
+                else if (_veriTabaniBasari == maxPuan) enGuclu = $"Veri Tabanları (%{maxPuan})";
                 else enGuclu = $"Siber Güv. (%{maxPuan})";
             }
 
@@ -739,79 +824,116 @@ namespace KademeliEgitimPlatformu
             {
                 ("Çözülen Soru", $"{gercekSoru} / {_aktifTercih.HedefSoruSayisi}"),
                 ("Çalışma Süresi", sureMetni),
-                ("En Güçlü Ders", enGuclu),
+                ("En Güçlü Alan", enGuclu),
                 ("Hedef İlerlemesi", $"%{hedefYuzde} Tamamlandı")
             };
 
+            var izgara = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 2,
+                Tag = "AnaBolum"
+            };
+            izgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            izgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            izgara.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+            izgara.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
+
             for (int i = 0; i < kutular.Length; i++)
             {
-                int col = i % 2;
-                int row = i / 2;
                 var mini = new Panel
                 {
-                    Location = new Point(12 + col * 168, 12 + row * 74),
-                    Size = new Size(160, 66),
+                    Dock = DockStyle.Fill,
+                    Margin = new Padding(4),
+                    Padding = new Padding(10, 8, 8, 6),
                     BackColor = tema.ArkaPlan,
                     Tag = "SabitRenk"
                 };
 
-                var lblDeger = new Label { Text = kutular[i].Deger, Font = new Font("Segoe UI", 10.5f, FontStyle.Bold), ForeColor = tema.Vurgu, Location = new Point(10, 10), AutoSize = true, Tag = "SabitRenk" };
-                var lblEtiket = new Label { Text = kutular[i].Etiket, Font = new Font("Segoe UI", 8.5f), ForeColor = Color.FromArgb(180, tema.Yazi), Location = new Point(10, 36), AutoSize = true, Tag = "SabitRenk" };
+                var lblDeger = new Label { Text = kutular[i].Deger, Font = FontOnbellegi.Al("Segoe UI", 10.5f, FontStyle.Bold), ForeColor = tema.Vurgu, Dock = DockStyle.Top, Height = 24, AutoEllipsis = true, Tag = "SabitRenk" };
+                var lblEtiket = new Label { Text = kutular[i].Etiket, Font = FontOnbellegi.Al("Segoe UI", 8.5f), ForeColor = Color.FromArgb(180, tema.Yazi), Dock = DockStyle.Fill, Tag = "SabitRenk" };
 
-                mini.Controls.AddRange(new Control[] { lblDeger, lblEtiket });
-                _pnlGelisimKart.Controls.Add(mini);
+                mini.Controls.Add(lblEtiket);
+                mini.Controls.Add(lblDeger);
+                izgara.Controls.Add(mini, i % 2, i / 2);
             }
+
+            _pnlGelisimKart.Controls.Add(izgara);
+            _pnlGelisimKart.ResumeLayout(true);
         }
 
         private void GorevlerKartiniGuncelle()
         {
-            _pnlGorevlerKart.Controls.Clear();
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _pnlGorevlerKart.SuspendLayout();
+            PanelTemizle(_pnlGorevlerKart);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
-            int y = 12;
-            foreach (var g in _aktifTercih.GunlukGorevler)
+            var izgara = new TableLayoutPanel
             {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = _aktifTercih.GunlukGorevler.Count + 1,
+                Tag = "AnaBolum"
+            };
+            izgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 78F));
+            izgara.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22F));
+
+            int satir = 0;
+            foreach (GunlukGorev g in _aktifTercih.GunlukGorevler)
+            {
+                izgara.RowStyles.Add(new RowStyle(SizeType.Absolute, 32F));
                 var lblDurum = new Label
                 {
                     Text = g.TamamlandiMi ? $"✅ {g.Baslik}" : $"⬜ {g.Baslik} ({g.Mevcut}/{g.Hedef})",
-                    Font = new Font("Segoe UI", 9f, g.TamamlandiMi ? FontStyle.Strikeout : FontStyle.Regular),
+                    Font = FontOnbellegi.Al("Segoe UI", 9f, g.TamamlandiMi ? FontStyle.Strikeout : FontStyle.Regular),
                     ForeColor = g.TamamlandiMi ? Color.FromArgb(140, tema.Yazi) : tema.Yazi,
-                    Location = new Point(14, y),
-                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    AutoEllipsis = true,
                     Tag = "SabitRenk"
                 };
 
                 var lblXp = new Label
                 {
                     Text = $"+{g.XpOdulu} XP",
-                    Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                    Font = FontOnbellegi.Al("Segoe UI", 8.5f, FontStyle.Bold),
                     ForeColor = tema.Vurgu,
-                    Location = new Point(282, y),
-                    AutoSize = true,
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleRight,
                     Tag = "SabitRenk"
                 };
 
-                _pnlGorevlerKart.Controls.AddRange(new Control[] { lblDurum, lblXp });
-                y += 32;
+                izgara.Controls.Add(lblDurum, 0, satir);
+                izgara.Controls.Add(lblXp, 1, satir);
+                satir++;
             }
 
+            izgara.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             int tamamlanan = _aktifTercih.GunlukGorevler.Count(x => x.TamamlandiMi);
             var lblOzet = new Label
             {
                 Text = $"Tamamlanan görev: {tamamlanan} / {_aktifTercih.GunlukGorevler.Count}",
-                Font = new Font("Segoe UI", 8.5f, FontStyle.Bold),
+                Font = FontOnbellegi.Al("Segoe UI", 8.5f, FontStyle.Bold),
                 ForeColor = Color.FromArgb(180, tema.Yazi),
-                Location = new Point(14, 116),
-                AutoSize = true,
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.BottomLeft,
                 Tag = "SabitRenk"
             };
-            _pnlGorevlerKart.Controls.Add(lblOzet);
+            izgara.Controls.Add(lblOzet, 0, satir);
+            izgara.SetColumnSpan(lblOzet, 2);
+
+            _pnlGorevlerKart.Controls.Add(izgara);
+            _pnlGorevlerKart.ResumeLayout(true);
         }
 
         private void HaftalikGrafikCiz(Graphics g, Rectangle alan)
         {
+            if (alan.Width < 120 || alan.Height < 80)
+                return;
+
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
             int gunFarki = ((int)DateTime.Today.DayOfWeek + 6) % 7;
             DateTime pazartesi = DateTime.Today.AddDays(-gunFarki);
@@ -825,16 +947,18 @@ namespace KademeliEgitimPlatformu
             }
 
             int maks = Math.Max(30, dakikalar.Max());
-            int barGenislik = 26;
-            int aralik = 46;
-            int baslangicX = 22;
-            int tabanY = 114;
-            int maksYukseklik = 76;
+            int kenarBosluk = 22;
+            int kullanilabilirGenislik = alan.Width - (kenarBosluk * 2);
+            int aralik = Math.Max(32, kullanilabilirGenislik / 7);
+            int barGenislik = Math.Clamp(aralik - 16, 18, 36);
+            int baslangicX = kenarBosluk + (kullanilabilirGenislik - (aralik * 7) + (aralik - barGenislik)) / 2;
+            int tabanY = alan.Height - 30;
+            int maksYukseklik = Math.Max(40, tabanY - 32);
 
             using var yaziFirca = new SolidBrush(Color.FromArgb(190, tema.Yazi));
             using var barFirca = new SolidBrush(tema.Vurgu);
             using var bosFirca = new SolidBrush(Color.FromArgb(40, tema.Yazi));
-            using var font = new Font("Segoe UI", 8f);
+            Font font = FontOnbellegi.Al("Segoe UI", 8f);
 
             for (int i = 0; i < 7; i++)
             {
@@ -845,7 +969,7 @@ namespace KademeliEgitimPlatformu
                 if (h > 0)
                     g.FillRectangle(barFirca, x, tabanY - h, barGenislik, h);
 
-                g.DrawString(gunAdlari[i], font, yaziFirca, x + 2, tabanY + 5);
+                g.DrawString(gunAdlari[i], font, yaziFirca, x + 2, tabanY + 6);
                 if (dakikalar[i] > 0)
                     g.DrawString($"{dakikalar[i]}d", font, yaziFirca, x, tabanY - h - 16);
             }
@@ -853,36 +977,49 @@ namespace KademeliEgitimPlatformu
 
         private void AktivitelerKartiniGuncelle()
         {
-            _pnlAktivitelerKart.Controls.Clear();
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _pnlAktivitelerKart.SuspendLayout();
+            PanelTemizle(_pnlAktivitelerKart);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
-            int y = 12;
-            foreach (var akt in _aktifTercih.SonAktiviteler.Take(4))
+            var izgara = new TableLayoutPanel
             {
+                Dock = DockStyle.Fill,
+                ColumnCount = 1,
+                RowCount = 4,
+                Tag = "AnaBolum"
+            };
+
+            int satir = 0;
+            foreach (AktiviteKaydi akt in _aktifTercih.SonAktiviteler.Take(4))
+            {
+                izgara.RowStyles.Add(new RowStyle(SizeType.Percent, 25F));
                 string zaman = KisisellestirmeServisi.GoreceliTarihFormatla(akt.Tarih);
                 string xpMetni = akt.KazanilanXp > 0 ? $" (+{akt.KazanilanXp} XP)" : "";
                 var lbl = new Label
                 {
                     Text = $"• {zaman} – {akt.Aciklama}{xpMetni}",
-                    Font = new Font("Segoe UI", 8.5f),
+                    Font = FontOnbellegi.Al("Segoe UI", 8.5f),
                     ForeColor = tema.Yazi,
-                    Location = new Point(12, y),
-                    Size = new Size(330, 32),
+                    Dock = DockStyle.Fill,
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    AutoEllipsis = true,
                     Tag = "SabitRenk"
                 };
-                _pnlAktivitelerKart.Controls.Add(lbl);
-                y += 37;
+                izgara.Controls.Add(lbl, 0, satir++);
             }
+
+            _pnlAktivitelerKart.Controls.Add(izgara);
+            _pnlAktivitelerKart.ResumeLayout(true);
         }
 
         private void ProfilDuzenlePenceresiAc()
         {
-            var tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            TemaPaleti tema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
 
             using var dlg = new Form
             {
                 Text = "Profili Düzenle",
-                Size = new Size(410, 355),
+                Size = new Size(420, 365),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
                 StartPosition = FormStartPosition.CenterParent,
                 MaximizeBox = false,
@@ -892,10 +1029,10 @@ namespace KademeliEgitimPlatformu
             };
 
             var lblAd = new Label { Text = "Öğrenci Adı:", Location = new Point(20, 18), AutoSize = true };
-            var txtAd = new TextBox { Text = _aktifTercih.OgrenciAdi, Location = new Point(20, 40), Size = new Size(350, 26), BackColor = tema.Kart, ForeColor = tema.Yazi };
+            var txtAd = new TextBox { Text = _aktifTercih.OgrenciAdi, Location = new Point(20, 40), Size = new Size(360, 26), BackColor = tema.Kart, ForeColor = tema.Yazi };
 
             var lblHedef = new Label { Text = "Kişisel Hedef / Başlık:", Location = new Point(20, 76), AutoSize = true };
-            var txtHedef = new TextBox { Text = _aktifTercih.KisiselHedef, Location = new Point(20, 98), Size = new Size(350, 26), BackColor = tema.Kart, ForeColor = tema.Yazi };
+            var txtHedef = new TextBox { Text = _aktifTercih.KisiselHedef, Location = new Point(20, 98), Size = new Size(360, 26), BackColor = tema.Kart, ForeColor = tema.Yazi };
 
             var lblSoruHedef = new Label { Text = "Soru Çözme Hedefi:", Location = new Point(20, 134), AutoSize = true };
             var numSoru = new NumericUpDown
@@ -911,25 +1048,26 @@ namespace KademeliEgitimPlatformu
             };
 
             var lblAvatarSec = new Label { Text = "Avatar Seç:", Location = new Point(20, 168), AutoSize = true };
-            var flpAvatarlar = new FlowLayoutPanel { Location = new Point(20, 190), Size = new Size(355, 72) };
+            var flpAvatarlar = new FlowLayoutPanel { Location = new Point(20, 190), Size = new Size(365, 76) };
 
             string secilenAvatar = _aktifTercih.Avatar;
-            foreach (var av in Kisisellestirme.AvatarSecenekleri)
+            foreach (string av in Kisisellestirme.AvatarSecenekleri)
             {
+                string secenek = av;
                 var btnAv = new Button
                 {
-                    Text = av,
+                    Text = secenek,
                     Size = new Size(38, 32),
-                    Font = new Font("Segoe UI Emoji", 12f),
+                    Font = FontOnbellegi.Al("Segoe UI Emoji", 12f),
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = av == secilenAvatar ? tema.Vurgu : tema.Kart,
+                    BackColor = secenek == secilenAvatar ? tema.Vurgu : tema.Kart,
                     ForeColor = tema.Yazi,
                     Margin = new Padding(0, 0, 5, 5),
                     Cursor = Cursors.Hand
                 };
                 btnAv.Click += (_, _) =>
                 {
-                    secilenAvatar = av;
+                    secilenAvatar = secenek;
                     foreach (Button b in flpAvatarlar.Controls)
                         b.BackColor = b.Text == secilenAvatar ? tema.Vurgu : tema.Kart;
                 };
@@ -939,7 +1077,7 @@ namespace KademeliEgitimPlatformu
             var btnKaydet = new Button
             {
                 Text = "Kaydet",
-                Location = new Point(260, 274),
+                Location = new Point(270, 280),
                 Size = new Size(110, 32),
                 FlatStyle = FlatStyle.Flat,
                 BackColor = tema.Vurgu,
@@ -965,11 +1103,17 @@ namespace KademeliEgitimPlatformu
 
         private void ProfilKartiniPngKaydet()
         {
+            string guvenliAd = DosyaAdiTemizle(_aktifTercih.OgrenciAdi);
+            string masaustu = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
+
             using var sfd = new SaveFileDialog
             {
                 Title = "Profil Kartını PNG Olarak Kaydet",
                 Filter = "PNG Görseli (*.png)|*.png",
-                FileName = $"{_aktifTercih.OgrenciAdi.Replace(' ', '_')}_ProfilKarti.png"
+                DefaultExt = "png",
+                AddExtension = true,
+                FileName = $"{guvenliAd}_ProfilKarti.png",
+                InitialDirectory = Directory.Exists(masaustu) ? masaustu : VeriYolu.VeriKlasoru
             };
 
             if (sfd.ShowDialog(this) != DialogResult.OK) return;
@@ -980,10 +1124,26 @@ namespace KademeliEgitimPlatformu
 
             try
             {
-                using var bmp = new Bitmap(_pnlProfilOnizleme.Width, _pnlProfilOnizleme.Height);
+                using var bmp = new Bitmap(Math.Max(1, _pnlProfilOnizleme.Width), Math.Max(1, _pnlProfilOnizleme.Height));
                 _pnlProfilOnizleme.DrawToBitmap(bmp, new Rectangle(0, 0, bmp.Width, bmp.Height));
                 bmp.Save(sfd.FileName, ImageFormat.Png);
                 BasariBildirimiGoster("📸 Profil kartı PNG olarak kaydedildi!");
+            }
+            catch (UnauthorizedAccessException ex)
+            {
+                MessageBox.Show(
+                    "Seçilen klasöre yazma izni yok. Lütfen Masaüstü veya Belgelerim klasörünü seçin.\n\n" + ex.Message,
+                    "Erişim Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    "Profil kartı PNG olarak kaydedilemedi.\n\n" + ex.Message,
+                    "Kaydetme Hatası",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
             }
             finally
             {
@@ -992,23 +1152,36 @@ namespace KademeliEgitimPlatformu
             }
         }
 
+        private static string DosyaAdiTemizle(string hamAd)
+        {
+            char[] gecersizler = Path.GetInvalidFileNameChars();
+            string temiz = new string((hamAd ?? "Ogrenci")
+                .Trim()
+                .Select(c => c == ' ' || gecersizler.Contains(c) ? '_' : c)
+                .ToArray());
+
+            return string.IsNullOrWhiteSpace(temiz) ? "Ogrenci" : temiz;
+        }
+
         private void TemaButonlariniYenile()
         {
-            _flpTemaButonlari.Controls.Clear();
-            var temalar = Kisisellestirme.TumTemalariGetir(_aktifTercih);
-            var aktifTema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+            _flpTemaButonlari.SuspendLayout();
+            PanelTemizle(_flpTemaButonlari);
+            List<TemaPaleti> temalar = Kisisellestirme.TumTemalariGetir(_aktifTercih);
+            TemaPaleti aktifTema = Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
             _btnOzelTemaSil.Visible = aktifTema.OzelMi;
 
-            foreach (var tema in temalar)
+            foreach (TemaPaleti tema in temalar)
             {
-                bool secili = tema.Ad.Equals(_aktifTercih.TemaAdi, StringComparison.OrdinalIgnoreCase);
+                TemaPaleti secenek = tema;
+                bool secili = secenek.Ad.Equals(_aktifTercih.TemaAdi, StringComparison.OrdinalIgnoreCase);
                 var btn = new Button
                 {
                     Size = new Size(162, 34),
                     FlatStyle = FlatStyle.Flat,
-                    BackColor = tema.Kart,
-                    ForeColor = tema.Yazi,
-                    Text = $"● {tema.Ad}",
+                    BackColor = secenek.Kart,
+                    ForeColor = secenek.Yazi,
+                    Text = $"● {secenek.Ad}",
                     TextAlign = ContentAlignment.MiddleLeft,
                     Padding = new Padding(8, 0, 4, 0),
                     Margin = new Padding(0, 0, 6, 6),
@@ -1016,18 +1189,18 @@ namespace KademeliEgitimPlatformu
                     Tag = "SabitRenk"
                 };
 
-                btn.FlatAppearance.BorderColor = secili ? tema.Vurgu : Color.FromArgb(95, 95, 105);
+                btn.FlatAppearance.BorderColor = secili ? secenek.Vurgu : Color.FromArgb(95, 95, 105);
                 btn.FlatAppearance.BorderSize = secili ? 2 : 1;
 
                 btn.Paint += (_, e) =>
                 {
-                    using var firca = new SolidBrush(tema.Vurgu);
+                    using var firca = new SolidBrush(secenek.Vurgu);
                     e.Graphics.FillEllipse(firca, 10, 11, 11, 11);
                 };
 
                 btn.Click += (_, _) =>
                 {
-                    _aktifTercih.TemaAdi = tema.Ad;
+                    _aktifTercih.TemaAdi = secenek.Ad;
                     _aktifTercih.VurguHex = null;
                     CanliUygula();
                 };
@@ -1046,6 +1219,8 @@ namespace KademeliEgitimPlatformu
             };
             btnYeniRenk.Click += (_, _) => YeniRenkPaletiEkleDialog();
             _flpTemaButonlari.Controls.Add(btnYeniRenk);
+
+            _flpTemaButonlari.ResumeLayout(true);
         }
 
         private void YeniRenkPaletiEkleDialog()
@@ -1086,7 +1261,7 @@ namespace KademeliEgitimPlatformu
             if (pencere.ShowDialog(this) == DialogResult.OK)
             {
                 string ad = string.IsNullOrWhiteSpace(txtAd.Text) ? $"Özel Tema {_aktifTercih.OzelPaletler.Count + 1}" : txtAd.Text.Trim();
-                var yeniPalet = KisisellestirmeServisi.TekRenktenPaletUret(ad, renkSecici.Color, rbKoyu.Checked);
+                OzelRenkPaleti yeniPalet = KisisellestirmeServisi.TekRenktenPaletUret(ad, renkSecici.Color, rbKoyu.Checked);
                 _aktifTercih.OzelPaletler.RemoveAll(p => p.Ad.Equals(ad, StringComparison.OrdinalIgnoreCase));
                 _aktifTercih.OzelPaletler.Add(yeniPalet);
                 _aktifTercih.TemaAdi = ad;
@@ -1099,7 +1274,8 @@ namespace KademeliEgitimPlatformu
 
         private void CanliUygula()
         {
-            Kisisellestirme.TemayiFormUzerineUygula(this, _pnlSidebar, _pnlIcerikAlani, _aktifTercih);
+            Kisisellestirme.TemayiFormUzerineUygula(this, _pnlSidebar, _pnlIcerikAlani, _pnlKisisellestirme, _aktifTercih);
+            SidebarAktifButonlariniGuncelle(_aktifEkranKodu);
             TumProfilVerileriniYenile();
         }
     }

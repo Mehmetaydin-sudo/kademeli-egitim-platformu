@@ -125,9 +125,9 @@ namespace KademeliEgitimPlatformu.Models
         public List<OzelRenkPaleti> OzelPaletler { get; set; } = new();
 
         // Öğrenci Kimliği & Hedef
-        public string OgrenciAdi { get; set; } = "Öğrenci Geliştirici";
-        public string Avatar { get; set; } = "👨‍💻";
-        public string KisiselHedef { get; set; } = "Siber Güvenlik & Yazılım Uzmanı Adayı";
+        public string OgrenciAdi { get; set; } = "Öğrenci";
+        public string Avatar { get; set; } = "🎓";
+        public string KisiselHedef { get; set; } = "Kademeli Eğitim ile Uzmanlığa Yolculuk";
         public int HedefSoruSayisi { get; set; } = 100;
         public string? SeciliUnvan { get; set; } = null;
 
