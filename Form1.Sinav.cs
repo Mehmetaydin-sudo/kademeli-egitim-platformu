@@ -304,7 +304,7 @@ namespace KademeliEgitimPlatformu
             {
                 MessageBox.Show(
                     "Bu modül için henüz ara sınav sorusu bulunamadı.\n\n" +
-                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
+                    "Soru havuzunu Word (.docx), PDF (.pdf), Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
                     "Ara Sınav Bulunamadı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -345,7 +345,7 @@ namespace KademeliEgitimPlatformu
             {
                 MessageBox.Show(
                     "Seviye geçiş ara sınavı için soru bulunamadı.\n\n" +
-                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
+                    "Soru havuzunu Word (.docx), PDF (.pdf), Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
                     "Ara Sınav Bulunamadı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);
@@ -379,7 +379,7 @@ namespace KademeliEgitimPlatformu
                     "Bu seçimde henüz soru bulunamadı.\n\n" +
                     $"Disiplin: {(disiplin?.ToString() ?? "Tümü")}\n" +
                     $"Zorluk: {(zorluk?.ToString() ?? "Tümü")}\n\n" +
-                    "Soru havuzunu Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
+                    "Soru havuzunu Word (.docx), PDF (.pdf), Excel (.xlsx) veya .csv içe aktarımıyla genişletebilirsiniz.",
                     "Soru Bulunamadı",
                     MessageBoxButtons.OK,
                     MessageBoxIcon.Information);

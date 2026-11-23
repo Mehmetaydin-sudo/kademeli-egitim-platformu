@@ -285,28 +285,7 @@ namespace KademeliEgitimPlatformu.Services
         }
 
         /// <summary>Bozuk/eksik soruların uygulamayı çökertmesini engelleyen doğrulama.</summary>
-        public static bool SoruGecerliMi(Soru? s)
-        {
-            if (s == null || string.IsNullOrWhiteSpace(s.Baslik))
-                return false;
-
-            if (s.Secenekler == null || s.Secenekler.Count != 4 || s.Secenekler.Any(string.IsNullOrWhiteSpace))
-                return false;
-
-            if (s.DogruSecenekIndex < 0 || s.DogruSecenekIndex > 3)
-                return false;
-
-            if (!Enum.IsDefined(typeof(DisiplinTuru), s.Disiplin) || !Enum.IsDefined(typeof(ZorlukSeviyesi), s.Zorluk))
-                return false;
-
-            if (s.YanlisCevapAciklamalari != null && s.YanlisCevapAciklamalari.Keys.Any(k => k < 0 || k > 3))
-                return false;
-
-            if (s.Etiket != null && s.Etiket.Length > 50)
-                return false;
-
-            return true;
-        }
+        public static bool SoruGecerliMi(Soru? s) => SoruDogrulayici.GecerliMi(s);
 
         // ==================== EXCEL (.XLSX) VE CSV YARDIMCILARI ====================
         private static List<Soru> ExceldenOku(string dosyaYolu)

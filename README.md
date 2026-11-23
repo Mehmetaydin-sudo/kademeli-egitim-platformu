@@ -1,6 +1,6 @@
 # 🛡️ Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu
 
-Ortaöğretim ve ön lisans öğrencileri için **PostgreSQL 18 (`Npgsql`)**, **`BCrypt.Net-Next`**, **`ClosedXML` (`.xlsx` / `.csv`)** ve **gömülü Roslyn derleyicisi** mimarili masaüstü öğrenme ve sözdizimi (syntax) simülasyon platformu.
+Ortaöğretim ve ön lisans öğrencileri için **PostgreSQL 18 (`Npgsql`)**, **`BCrypt.Net-Next`**, **Word/PDF (`.docx` / `.pdf`)**, **`ClosedXML` (`.xlsx` / `.csv`)** ve **gömülü Roslyn derleyicisi** mimarili masaüstü öğrenme ve sözdizimi (syntax) simülasyon platformu.
 
 ---
 
@@ -20,6 +20,7 @@ Ortaöğretim ve ön lisans öğrencileri için **PostgreSQL 18 (`Npgsql`)**, **
   * **Kolay Mod** — her zaman açıktır.
   * **Kolay -> Orta Seviye Geçiş Ara Sınavı ve Modül Ara Sınavları** — geçme barajı **%70**'tir; geçildiğinde **Orta Mod** kilidi kalıcı olarak açılır ve sonuç `seviye_gecis_sinavlari` tablosuna kaydedilir.
   * **Orta -> Zor Seviye Geçiş Ara Sınavı** — geçme barajı **%75**'tir; geçildiğinde **Zor Mod (Gömülü Kod Simülatörü)** kilidi kalıcı olarak açılır.
+* **Word (`.docx`) ve PDF (`.pdf`) Belgelerinden Çevrimdışı Soru İçe Aktarma:** `DocumentFormat.OpenXml` ve `UglyToad.PdfPig` ile tamamen çevrimdışı olarak Word (paragraf ve tablo) ve PDF belgelerinden soru ayrıştırılır. Kayıt öncesinde açılan **Önizleme / Kontrol Penceresi** (`BelgeOnizlemeFormu`), `SoruDogrulayici` üzerinden hatalı veya eksik şıklı soruları kırmızı vurgular, varsayılan modül seçimine ve onaylanan geçerli soruların `NpgsqlTransaction` ile veritabanına aktarılmasına izin verir.
 * **`ClosedXML` ile Excel (`.xlsx`) ve `.csv` Veri Aktarımı:** Soru içe ve dışa aktarım işlemlerinde JSON formatı kaldırılmış olup `ClosedXML` kütüphanesiyle `.xlsx` ve `.csv` formatları kullanılır. İçe aktarım işlemleri mevcut kullanıcı ilerlemesini ezmeden `NpgsqlTransaction` güvencesiyle yürütülür.
 * **Pedagojik "Neden Yanlış" Paneli:** Yanlış şık seçildiğinde hatanın kaynağını sade bir dille anında açıklar.
 * **Gömülü Kod Simülatörü (Roslyn):** Editördeki C# kodunu gerçek Roslyn derleyicisiyle denetler. Hatalar satır/sütun numarası ve Türkçe pedagojik ipuçlarıyla listelenir.
@@ -67,9 +68,20 @@ dotnet run
 
 ---
 
-## 📊 Soru Havuzu ve Excel (`.xlsx`) / `.csv` Paket Biçimi
+## 📊 Soru Havuzu ve İçe/Dışa Aktarım Biçimleri (`.docx` / `.pdf` / `.xlsx` / `.csv`)
 
-Soru içe ve dışa aktarım işlemlerinde **Excel (`.xlsx`)** ve **`.csv`** formatları kullanılır. Tablo sütun sırası aşağıdaki gibidir:
+### Word (`.docx`) ve PDF (`.pdf`) Belge İçe Aktarma Biçimleri
+
+Ana menüdeki **Soru İçe Aktar** penceresi `.docx` ve `.pdf` belgelerini öncelikli olarak destekler ve veritabanına yazmadan önce önizleme ekranında doğrular:
+
+* **Klasik Test Formatı:** `1.`, `1)`, `Soru 1:` başlangıçları; `A)`, `A.`, `a)` … `D)` şıkları (alt alta veya aynı satırda); `Cevap: B`, `Doğru Cevap: B`, `Yanıt: B` satırları.
+* **Toplu Cevap Anahtarı:** Belge sonunda `Cevap Anahtarı: 1-B, 2-A` veya `1. B` / `2. A` biçimindeki cevap anahtarları soru numaralarıyla otomatik eşleştirilir.
+* **Opsiyonel Alanlar:** `Zorluk:` (`Kolay`/`Orta`/`Zor` — belirtilmezse varsayılan `Orta`), `Modül:` (belirtilmezse önizleme ekranında seçilen modül), `Açıklama:` / `Neden Yanlış:`, `Kod:` ve `Etiket:`.
+* **Word (`.docx`) Tablo Formatı:** `Soru | A | B | C | D | Cevap | Zorluk | Açıklama` sütunlarıyla hazırlanmış tablolar otomatik algılanır. Eksik şıklı veya cevapsız sorular sessizce atlanmaz; soru numarası ve sebebiyle uyarı listesinde gösterilir.
+
+### Excel (`.xlsx`) ve `.csv` Paket Biçimi
+
+Soru içe ve dışa aktarım işlemlerinde **Excel (`.xlsx`)** ve **`.csv`** formatları da desteklenir. Tablo sütun sırası aşağıdaki gibidir:
 
 | Sütun | Açıklama |
 | :--- | :--- |
@@ -115,6 +127,8 @@ KademeliEgitimPlatformu/
 │   ├── VeritabaniBaglantisi.cs   # appsettings.json + Npgsql merkezi bağlantı yönetimi
 │   ├── KullaniciServisi.cs       # BCrypt.Net-Next ile kullanıcı kayıt/giriş/şifre güncelleme
 │   ├── SoruServisi.cs            # PostgreSQL soru havuzu + ClosedXML (.xlsx/.csv) aktarım
+│   ├── SoruDogrulayici.cs        # Soru alan, şık ve doğru cevap doğrulama kuralları
+│   ├── BelgeSoruDonusturucu.cs   # Çevrimdışı Word (.docx) ve PDF (.pdf) soru ayrıştırıcı
 │   ├── SoruKoruyucu.cs           # BCrypt.Net-Next parola/metin özetleme ve doğrulama yardımcısı
 │   ├── KademeServisi.cs          # Seviye Geçiş Ara Sınavı / Orta Mod / Zor Mod geçiş kuralları
 │   ├── ISoruDeposu.cs            # Soru veri erişim arayüzü
@@ -127,9 +141,10 @@ KademeliEgitimPlatformu/
 │   └── VeriYolu.cs               # Dışa aktarım ve yapılandırma dosya yolları
 ├── tools/
 │   └── SoruPaketleyici/          # ClosedXML tabanlı .xlsx / .csv soru paketleme aracı
+├── BelgeOnizlemeFormu.cs         # .docx/.pdf soru önizleme, doğrulama ve onay ekranı
 ├── BufferedPanel.cs              # Çift tamponlu panel (titremesiz çizim)
 ├── Form1.cs                      # Çekirdek form, sidebar, ekran geçişi, kısayollar
-├── Form1.AnaMenu.cs              # Kontrol paneli, modül/zorluk kartları, .xlsx/.csv içe aktarma
+├── Form1.AnaMenu.cs              # Kontrol paneli, modül/zorluk kartları, .docx/.pdf/.xlsx/.csv içe aktarma
 ├── Form1.Sinav.cs                # Sınav ve Seviye Geçiş Ara Sınavı akışı, puanlama
 ├── Form1.Simulator.cs            # Roslyn simülatörü ve hata karnesi
 ├── Form1.Designer.cs
@@ -149,6 +164,12 @@ dotnet test tests/KademeliEgitimPlatformu.Tests/KademeliEgitimPlatformu.Tests.cs
 ---
 
 ## 📌 Sürüm Günlüğü ve Yama Notları (Changelog)
+
+### [v0.8.1 — Belge İçe Aktarma Geliştirmesi] — 2026-11-23
+* **[Word & PDF Soru Dönüştürücü (`DocumentFormat.OpenXml` + `UglyToad.PdfPig`)]** Son kullanıcıların `.xlsx` hazırlamak zorunda kalmadan `.docx` (paragraf + tablo) ve `.pdf` (sayfa sayfa Türkçe UTF-8) belgelerinden tamamen çevrimdışı soru yükleyebilmesi için `Services/BelgeSoruDonusturucu.cs` eklendi. Klasik test formatları, toplu cevap anahtarı (`1-B, 2-A` / `1. B`), opsiyonel `Zorluk:` / `Modül:` / `Açıklama:` alanları ve Word soru tabloları desteklenir; eksik şıklı veya cevapsız sorular soru numarası ve sebebiyle uyarı olarak raporlanır.
+* **[Merkezi Soru Doğrulama (`SoruDogrulayici`)]** `Services/SoruDogrulayici.cs` ile soru bütünlüğü kuralları tek merkezde toplandı ve eksik/hatalı alanlar için Türkçe gerekçe listesi üretildi.
+* **[Önizleme ve Kontrol Ekranı (`BelgeOnizlemeFormu`)]** `OpenFileDialog` filtresi `.docx`, `.pdf`, `.xlsx` ve `.csv` uzantılarının tamamını destekleyecek şekilde (`.docx` ve `.pdf` öncelikli) güncellendi. `.docx`/`.pdf` seçiminde veritabanına yazmadan önce önizleme ekranı açılır; hatalı sorular vurgulanır, varsayılan modül seçilebilir ve yalnızca onaylanan geçerli sorular PostgreSQL transaction içinde kaydedilir.
+* **[Birim Testleri]** `tests/KademeliEgitimPlatformu.Tests/BelgeSoruDonusturucuTests.cs` altına klasik test formatı, toplu cevap anahtarı, eksik şık/cevap uyarıları, Türkçe karakterler, gerçek `.docx` (tablo + paragraf), gerçek `.pdf` ve önizleme formu smoke testleri eklendi.
 
 ### [v0.8.1] — 2026-11-15
 * **[Dağıtım & İzin Güvenliği (`Program Files`)]** `Directory.GetCurrentDirectory()` kullanımları tamamen kaldırıldı; `appsettings.json`, `appsettings.example.json` ve `database/schema.sql` gibi salt-okunur dosyalar `AppContext.BaseDirectory` üzerinden okunacak şekilde sabitlendi. Çalışma zamanı log (`hata.log`) ve dışa aktarılan Excel/CSV (`.xlsx`, `.csv`) çıktıları `Environment.SpecialFolder.MyDocuments` (`Belgelerim\KademeliEgitimPlatformu`) klasörüne yönlendirildi.
