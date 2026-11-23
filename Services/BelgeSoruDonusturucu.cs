@@ -276,8 +276,19 @@ namespace KademeliEgitimPlatformu.Services
             {
                 if (SoruTablosuMu(tablo, out TabloSutunHaritasi? harita, out bool baslikSatiriVar) && harita != null)
                 {
-                    tabloSorusuBulundu = true;
+                    int oncekiKayitSayisi = sonuc.Kayitlar.Count;
                     TablodanSorulariEkle(tablo, harita, baslikSatiriVar, varsayilanDisiplin, sonuc, ref sonrakiSoruNo);
+
+                    if (sonuc.Kayitlar.Count > oncekiKayitSayisi)
+                    {
+                        tabloSorusuBulundu = true;
+                    }
+                    else
+                    {
+                        sonuc.Uyarilar.Add(new BelgeAyristirmaUyarisi(
+                            null,
+                            "Soru tablosunda başlık satırı dışında veri satırı bulunamadı."));
+                    }
                 }
                 else
                 {
@@ -647,6 +658,15 @@ namespace KademeliEgitimPlatformu.Services
         private static BelgeDonusturmeSonucu PdfdenDonustur(string dosyaYolu, DisiplinTuru varsayilanDisiplin)
         {
             string hamMetin = PdfdenMetinCikar(dosyaYolu);
+            if (string.IsNullOrWhiteSpace(hamMetin))
+            {
+                var bosSonuc = new BelgeDonusturmeSonucu { HamMetin = string.Empty };
+                bosSonuc.Uyarilar.Add(new BelgeAyristirmaUyarisi(
+                    null,
+                    "PDF belgesinden metin çıkarılamadı (dosya boş veya yalnızca taranmış görsel içeriyor olabilir)."));
+                return bosSonuc;
+            }
+
             BelgeDonusturmeSonucu sonuc = MetindenSorulariAyristir(hamMetin, varsayilanDisiplin);
             sonuc.HamMetin = hamMetin;
             return sonuc;

@@ -47,7 +47,10 @@ namespace KademeliEgitimPlatformu.Services
             foreach (YanlisKaydi kayit in kayitlar)
             {
                 using var komut = new NpgsqlCommand(ekleSql, baglanti, islem);
-                komut.Parameters.AddWithValue("@kullanici_id", (object?)_kullaniciId ?? DBNull.Value);
+                komut.Parameters.Add(new NpgsqlParameter("@kullanici_id", NpgsqlTypes.NpgsqlDbType.Integer)
+                {
+                    Value = (object?)_kullaniciId ?? DBNull.Value
+                });
                 komut.Parameters.AddWithValue("@tarih", kayit.Tarih.ToUniversalTime());
                 komut.Parameters.AddWithValue("@disiplin", (short)kayit.Disiplin);
                 komut.Parameters.AddWithValue("@zorluk", (short)kayit.Zorluk);
