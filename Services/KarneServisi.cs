@@ -158,7 +158,7 @@ namespace KademeliEgitimPlatformu.Services
             DateTime tarih = raporTarihi ?? DateTime.Now;
             var sb = new StringBuilder();
 
-            sb.AppendLine("=== KADEMELİ BİLİŞİM VE SİBER GÜVENLİK EĞİTİM PLATFORMU ===");
+            sb.AppendLine("=== KADEMELİ EĞİTİM PLATFORMU ===");
             sb.AppendLine("Hata Karnesi Raporu");
             sb.AppendLine($"Rapor Tarihi : {tarih:dd.MM.yyyy HH:mm}");
             if (!string.IsNullOrWhiteSpace(surum))

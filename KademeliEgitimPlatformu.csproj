@@ -9,6 +9,10 @@
     <Version>0.8.1</Version>
     <AssemblyName>KademeliEgitimPlatformu</AssemblyName>
     <RootNamespace>KademeliEgitimPlatformu</RootNamespace>
+    <Product>Kademeli Eğitim Platformu</Product>
+    <Title>Kademeli Eğitim Platformu</Title>
+    <AssemblyTitle>Kademeli Eğitim Platformu</AssemblyTitle>
+    <Description>Öğretmen ve öğrencilerin her alan için kendi sorularını (.docx, .pdf, .xlsx, .csv) yükleyebildiği, kademeli zorluk seviyeleri ve pedagojik açıklamalarla %100 çevrimdışı çalışan masaüstü eğitim ve sınav platformu.</Description>
   </PropertyGroup>
 
   <ItemGroup>
