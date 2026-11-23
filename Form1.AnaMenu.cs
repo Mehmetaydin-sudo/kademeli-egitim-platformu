@@ -35,7 +35,7 @@ namespace KademeliEgitimPlatformu
             Panel pnlUst = new() { Dock = DockStyle.Fill };
             Label lblBaslik = new()
             {
-                Text = "Kademeli Bilişim ve Siber Güvenlik Eğitim Platformu",
+                Text = "Kademeli Eğitim Platformu",
                 Font = FontOnbellegi.Al("Segoe UI", 20, FontStyle.Bold),
                 ForeColor = Color.White,
                 Dock = DockStyle.Left,
