@@ -17,7 +17,7 @@ namespace KademeliEgitimPlatformu
     /// </summary>
     public partial class Form1 : Form
     {
-        private const string Surum = "v0.8.3";
+        private const string Surum = "v0.8.5";
 
         // Servisler yalnızca ilk ihtiyaç duyulduğunda oluşturulur.
         // Böylece açılışta gereksiz veritabanı ve Roslyn hazırlığı yapılmaz.
@@ -112,9 +112,19 @@ namespace KademeliEgitimPlatformu
                 int sn = _gecenSaniye % 60;
                 _lblSureSayaci.Text = $"⏱️ {dk:00}:{sn:00}   ";
             };
+            // Kayıtlı tema ve profil tercihini ilk çizimden önce yükle (açılışta titreme/yanlış tema olmasın).
+            _aktifTercih = Kisisellestirme.TercihiYukle();
+
             ArayuzuOlustur();
             KisisellestirmeModulunuBagla();
         }
+
+        private TemaPaleti AktifTema => Kisisellestirme.TemaBul(_aktifTercih.TemaAdi, _aktifTercih);
+
+        private Color TemaIkincilYaziRengi(TemaPaleti tema) =>
+            KisisellestirmeServisi.ParlakMi(tema.ArkaPlan)
+                ? Color.FromArgb(71, 85, 105)
+                : Color.FromArgb(148, 163, 184);
 
         private void KaliciIlerlemeyiYukle()
         {
@@ -270,9 +280,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = "🎓 KADEMELİ EĞİTİM\n    ÇEVRİMDIŞI PLATFORM",
                 Font = FontOnbellegi.Al("Segoe UI", 12f, FontStyle.Bold),
-                ForeColor = Color.FromArgb(56, 189, 248),
+                ForeColor = AktifTema.Vurgu,
                 Dock = DockStyle.Top,
-                Height = 70
+                Height = 70,
+                Tag = "TemaVurgu"
             };
 
             _btnMenuAna = SidebarButonu("🏠  Kontrol Paneli", () => EkranDegistir("ANA"));
@@ -284,9 +295,10 @@ namespace KademeliEgitimPlatformu
             {
                 Text = $"{Surum} • PostgreSQL 18\nkademeli_egitim • BCrypt\n\nMehmet • Ünal\nİsmail Can • Yağız",
                 Font = FontOnbellegi.Al("Segoe UI", 8.5f),
-                ForeColor = Color.FromArgb(100, 116, 139),
+                ForeColor = TemaIkincilYaziRengi(AktifTema),
                 Dock = DockStyle.Bottom,
-                Height = 95
+                Height = 95,
+                Tag = "TemaIkincilYazi"
             };
 
             _pnlSidebar.Controls.Add(_btnMenuKisisellestirme);

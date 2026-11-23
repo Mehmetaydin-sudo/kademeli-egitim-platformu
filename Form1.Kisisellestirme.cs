@@ -59,8 +59,6 @@ namespace KademeliEgitimPlatformu
 
         private void KisisellestirmeModulunuBagla()
         {
-            _aktifTercih = Kisisellestirme.TercihiYukle();
-
             _pnlKisisellestirme.Dock = DockStyle.Fill;
             _pnlKisisellestirme.AutoScroll = true;
             _pnlKisisellestirme.AutoScrollMargin = new Size(0, 24);
@@ -384,15 +382,22 @@ namespace KademeliEgitimPlatformu
             {
                 Dock = DockStyle.Top,
                 AutoSize = true,
+                WrapContents = true,
                 MinimumSize = new Size(0, 240),
                 Margin = new Padding(0, 0, 0, 14),
                 Tag = "AnaBolum"
+            };
+            solKolon.SizeChanged += (_, _) =>
+            {
+                int hedefGenislik = Math.Max(300, solKolon.ClientSize.Width - solKolon.Padding.Horizontal);
+                if (_flpRozetVitrini.MaximumSize.Width != hedefGenislik)
+                    _flpRozetVitrini.MaximumSize = new Size(hedefGenislik, 0);
             };
 
             var pnlAyarKarti = new BufferedPanel
             {
                 Dock = DockStyle.Top,
-                Height = 344,
+                Height = 368,
                 Padding = new Padding(14),
                 Margin = new Padding(0, 0, 0, 12)
             };
@@ -566,6 +571,15 @@ namespace KademeliEgitimPlatformu
             _btnProfilDuzenle.Location = new Point(_btnPngIndir.Left - _btnProfilDuzenle.Width - 10, 16);
             _lblXpDetay.Location = new Point(genislik - _lblXpDetay.Width - 22, 98);
 
+            // Uzun kullanıcı adı/hedef metinlerinin sağdaki butonların altına girmesini önle.
+            int metinMaksGenislik = Math.Max(180, _btnProfilDuzenle.Left - 110);
+            _lblOgrenciAdi.MaximumSize = new Size(metinMaksGenislik, 28);
+            _lblOgrenciAdi.AutoEllipsis = true;
+            _lblUnvanVeHedef.MaximumSize = new Size(metinMaksGenislik, 22);
+            _lblUnvanVeHedef.AutoEllipsis = true;
+            _lblSeriVeJeton.MaximumSize = new Size(Math.Max(260, genislik - 120), 22);
+            _lblSeriVeJeton.AutoEllipsis = true;
+
             int barGenislik = Math.Max(200, genislik - 44);
             _pnlXpBarArka.Width = barGenislik;
             _pnlXpBarDolu.Width = Math.Clamp((int)(barGenislik * _sonXpDolulukOrani), 8, barGenislik);
@@ -587,14 +601,22 @@ namespace KademeliEgitimPlatformu
             List<RozetBilgisi> rozetler = Kisisellestirme.RozetleriHesapla(
                 _aktifTercih, _gorselBasari, _veriTabaniBasari, _siberBasari, _ortaModGecti, _simulatorOduluAlindi);
 
+            List<RozetBilgisi> yeniKazanilanlar = new();
             foreach (RozetBilgisi r in rozetler.Where(x => x.KazanildiMi))
             {
                 string anahtar = $"{r.Kod}_{r.Kademe}";
                 if (_aktifTercih.BildirilenRozetler.Add(anahtar))
-                {
-                    Kisisellestirme.TercihiKaydet(_aktifTercih);
-                    BasariBildirimiGoster($"🏆 Yeni Rozet Kazanıldı: {r.KategoriIkon} {r.SeriAdi} ({r.KademeAdi})!");
-                }
+                    yeniKazanilanlar.Add(r);
+            }
+
+            if (yeniKazanilanlar.Count > 0)
+            {
+                Kisisellestirme.TercihiKaydet(_aktifTercih);
+                RozetBilgisi sonRozet = yeniKazanilanlar[^1];
+                string bildirim = yeniKazanilanlar.Count == 1
+                    ? $"🏆 Yeni Rozet Kazanıldı: {sonRozet.KategoriIkon} {sonRozet.SeriAdi} ({sonRozet.KademeAdi})!"
+                    : $"🏆 {yeniKazanilanlar.Count} Yeni Rozet Kazanıldı! Son: {sonRozet.KategoriIkon} {sonRozet.SeriAdi} ({sonRozet.KademeAdi})";
+                BasariBildirimiGoster(bildirim);
             }
 
             HeroKartiniGuncelle(rozetler);
@@ -1018,6 +1040,7 @@ namespace KademeliEgitimPlatformu
 
             using var dlg = new Form
             {
+                AutoScaleMode = AutoScaleMode.Dpi,
                 Text = "Profili Düzenle",
                 Size = new Size(420, 365),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -1230,6 +1253,7 @@ namespace KademeliEgitimPlatformu
 
             using var pencere = new Form
             {
+                AutoScaleMode = AutoScaleMode.Dpi,
                 Text = "Yeni Renk Teması",
                 Size = new Size(340, 195),
                 FormBorderStyle = FormBorderStyle.FixedDialog,
@@ -1274,6 +1298,7 @@ namespace KademeliEgitimPlatformu
 
         private void CanliUygula()
         {
+            _anaMenuKirli = true;
             Kisisellestirme.TemayiFormUzerineUygula(this, _pnlSidebar, _pnlIcerikAlani, _pnlKisisellestirme, _aktifTercih);
             SidebarAktifButonlariniGuncelle(_aktifEkranKodu);
             TumProfilVerileriniYenile();

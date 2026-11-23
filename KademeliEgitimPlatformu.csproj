@@ -6,7 +6,7 @@
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>0.8.3</Version>
+    <Version>0.8.5</Version>
     <AssemblyName>KademeliEgitimPlatformu</AssemblyName>
     <RootNamespace>KademeliEgitimPlatformu</RootNamespace>
     <Product>Kademeli Eğitim Platformu</Product>

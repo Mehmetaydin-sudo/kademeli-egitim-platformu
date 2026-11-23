@@ -2,6 +2,8 @@ using System;
 using System.Drawing;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Windows.Forms;
 using KademeliEgitimPlatformu.Models;
 using KademeliEgitimPlatformu.Services;
 using Xunit;
@@ -85,6 +87,58 @@ namespace KademeliEgitimPlatformu.Tests
             Assert.Equal("#1E242B", acik.YaziHex);
             Assert.True(KisisellestirmeServisi.ParlakMi(KisisellestirmeServisi.HexToColor(acik.ArkaPlanHex, Color.Black)));
             Assert.False(KisisellestirmeServisi.ParlakMi(KisisellestirmeServisi.HexToColor(koyu.ArkaPlanHex, Color.White)));
+        }
+
+        [Fact]
+        public void AcikTemaUygulandiginda_TemaYaziVeKartEtiketleriKontrastiniKorur()
+        {
+            Exception? hata = null;
+            Color yaziRengi = Color.Empty;
+            Color arkaPlanRengi = Color.Empty;
+            Color kartRengi = Color.Empty;
+
+            var t = new Thread(() =>
+            {
+                try
+                {
+                    var servis = new KisisellestirmeServisi();
+                    var tercih = new KullaniciTemaTercihi { TemaAdi = "Açık Beyaz" };
+
+                    using var form = new Form();
+                    using var sidebar = new Panel();
+                    using var icerik = new Panel();
+                    using var profil = new Panel();
+                    using var anaMenu = new Panel();
+                    using var kart = new Panel { Tag = "TemaKart" };
+                    using var baslik = new Label { ForeColor = Color.White, Tag = "TemaYazi" };
+
+                    kart.Controls.Add(baslik);
+                    anaMenu.Controls.Add(kart);
+                    icerik.Controls.Add(anaMenu);
+                    icerik.Controls.Add(profil);
+
+                    servis.TemayiFormUzerineUygula(form, sidebar, icerik, profil, tercih);
+
+                    yaziRengi = baslik.ForeColor;
+                    arkaPlanRengi = anaMenu.BackColor;
+                    kartRengi = kart.BackColor;
+                }
+                catch (Exception ex)
+                {
+                    hata = ex;
+                }
+            })
+            { IsBackground = true };
+
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+            Assert.True(t.Join(TimeSpan.FromSeconds(15)));
+
+            Assert.Null(hata);
+            Assert.True(KisisellestirmeServisi.ParlakMi(arkaPlanRengi));
+            Assert.True(KisisellestirmeServisi.ParlakMi(kartRengi));
+            // Açık zeminde yazı rengi koyu kalmalı (beyaz-üzeri-beyaz olmamalı)
+            Assert.False(KisisellestirmeServisi.ParlakMi(yaziRengi));
         }
 
         [Fact]

@@ -597,7 +597,25 @@ namespace KademeliEgitimPlatformu.Services
                 {
                 }
 
-                if (renkleriUygula && tag != "SabitRenk")
+                if (tag == "TemaYazi")
+                {
+                    ctrl.ForeColor = tema.Yazi;
+                }
+                else if (tag == "TemaIkincilYazi")
+                {
+                    ctrl.ForeColor = ParlakMi(tema.ArkaPlan)
+                        ? Color.FromArgb(71, 85, 105)
+                        : Color.FromArgb(148, 163, 184);
+                }
+                else if (tag == "TemaVurgu")
+                {
+                    ctrl.ForeColor = tema.Vurgu;
+                }
+                else if (tag == "TemaKart")
+                {
+                    ctrl.BackColor = tema.Kart;
+                }
+                else if (renkleriUygula && tag != "SabitRenk")
                 {
                     if (ctrl is Button btn)
                     {
